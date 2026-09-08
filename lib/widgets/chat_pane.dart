@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../agent_store.dart';
+import '../l10n/app_localizations.dart';
 
 /// Chat view: settings bar (model/preset/stop/compact) + messages + composer.
 class ChatPane extends StatefulWidget {
@@ -63,6 +64,7 @@ class _ChatPaneState extends State<ChatPane> {
       listenable: widget.store,
       builder: (context, _) {
         final store = widget.store;
+        final l = AppLocalizations.of(context);
         return Column(
           children: [
             // Settings bar
@@ -71,7 +73,7 @@ class _ChatPaneState extends State<ChatPane> {
               child: Row(
                 children: [
                   DropdownButton<String>(
-                    hint: const Text('model'),
+                    hint: Text(l.model),
                     value: null,
                     items: _models
                         .map((m) => DropdownMenuItem(value: m, child: Text(m)))
@@ -84,7 +86,7 @@ class _ChatPaneState extends State<ChatPane> {
                   ),
                   const SizedBox(width: 8),
                   DropdownButton<String>(
-                    hint: const Text('preset'),
+                    hint: Text(l.preset),
                     items: _presets
                         .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                         .toList(),
@@ -95,10 +97,10 @@ class _ChatPaneState extends State<ChatPane> {
                   ),
                   const Spacer(),
                   IconButton(
-                      icon: const Icon(Icons.stop), tooltip: 'Interrupt',
+                      icon: const Icon(Icons.stop), tooltip: l.interrupt,
                       onPressed: () => store.interrupt()),
                   IconButton(
-                      icon: const Icon(Icons.compress), tooltip: 'Compact',
+                      icon: const Icon(Icons.compress), tooltip: l.compact,
                       onPressed: () => store.compact()),
                 ],
               ),
@@ -125,7 +127,7 @@ class _ChatPaneState extends State<ChatPane> {
                   Expanded(
                     child: TextField(
                       controller: _input,
-                      decoration: const InputDecoration(hintText: 'Message'),
+                      decoration: InputDecoration(hintText: l.messagePlaceholder),
                       onSubmitted: (_) => _send(),
                     ),
                   ),

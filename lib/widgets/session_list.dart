@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../agent_store.dart';
+import '../l10n/app_localizations.dart';
 
 /// Session list pane (no AppBar; used in both drawer and sidebar).
 class SessionListPane extends StatelessWidget {
@@ -21,17 +22,18 @@ class SessionListPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Column(
       children: [
         ListTile(
           leading: const Icon(Icons.add),
-          title: const Text('New session'),
+          title: Text(l.newSession),
           onTap: onCreate,
         ),
         const Divider(height: 1),
         Expanded(
           child: store.sessions.isEmpty
-              ? const Center(child: Text('No sessions'))
+              ? Center(child: Text(l.noSessions))
               : ListView.builder(
                   itemCount: store.sessions.length,
                   itemBuilder: (ctx, i) {
@@ -52,8 +54,8 @@ class SessionListPane extends StatelessWidget {
                           if (v == 'delete') onDelete(s.id);
                         },
                         itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                          const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                          PopupMenuItem(value: 'rename', child: Text(l.rename)),
+                          PopupMenuItem(value: 'delete', child: Text(l.delete)),
                         ],
                       ),
                     );

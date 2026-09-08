@@ -1,15 +1,9 @@
-// Agent chat app.
-//
-// Minimal two-pane agent chat: a session list + a chat view with a settings
-// bar. It talks directly to the abc agent backend over agent.v1.AgentService
-// (Connect over HTTP/2 over TLS). No easylab gateway, no REST.
-//
-// Configuration (baseUrl + token) is persisted via SharedPreferences.
 import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'prefs.dart';
 import 'settings_page.dart';
+import 'l10n/app_localizations.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +20,7 @@ class AgentApp extends StatefulWidget {
 class _AgentAppState extends State<AgentApp> {
   String? _baseUrl;
   String? _token;
+  Locale _locale = const Locale('zh');
 
   @override
   void initState() {
@@ -39,6 +34,7 @@ class _AgentAppState extends State<AgentApp> {
       setState(() {
         _baseUrl = p.baseUrl;
         _token = p.token;
+        _locale = Locale(p.locale);
       });
     }
   }
@@ -46,13 +42,16 @@ class _AgentAppState extends State<AgentApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Agent Chat',
+      title: 'Agent',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         brightness: Brightness.dark,
         useMaterial3: true,
       ),
+      locale: _locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: _baseUrl == null || _baseUrl!.isEmpty
           ? SettingsPage(
               onSaved: (b, t) {
@@ -63,7 +62,7 @@ class _AgentAppState extends State<AgentApp> {
                 return Future.value();
               },
             )
-          : HomeShell(baseUrl: _baseUrl!, token: _token ?? ''),
+          : HomeShell(locale: _locale, baseUrl: _baseUrl!, token: _token ?? ''),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:agent_client_sdk/agent_client_sdk.dart' as sdk;
 
 import 'agent_api.dart';
+import 'agent_events.dart';
 
 /// A display message the shell renders (kept free of SDK types).
 class MessageDisplay {
@@ -116,41 +117,28 @@ class AgentStore extends ChangeNotifier {
   }
 
   void _handleEvent(StreamEvent ev) {
-    final p = ev.params;
-    switch (ev.event) {
-      case 'text-delta':
-        _appendDelta(p['id']?.toString() ?? '', p['text']?.toString() ?? '', false);
-        break;
-      case 'reasoning-delta':
-        _appendDelta(p['id']?.toString() ?? '', p['text']?.toString() ?? '', true);
-        break;
-      case 'tool-call':
-        _ensureTool((p['toolCallId'] ?? p['id'] ?? '').toString(),
-            (p['toolName'] ?? p['name'] ?? 'tool').toString());
-        break;
-      case 'tool-result':
-      case 'tool-error':
-        _toolResult((p['toolCallId'] ?? p['id'] ?? '').toString(),
-            (p['formatted'] ?? p['output'] ?? p['result'] ?? '').toString());
-        break;
-      case 'turn-complete':
+    switch (toAgentEvent(ev)) {
+      case TextDelta(:final id, :final text):
+        _appendDelta(id, text, false);
+      case ReasoningDelta(:final id, :final text):
+        _appendDelta(id, text, true);
+      case ToolCall(:final id, :final name):
+        _ensureTool(id, name);
+      case ToolResult(:final id, :final output):
+        _toolResult(id, output);
+      case ToolError(:final id, :final output):
+        _toolResult(id, output);
+      case TurnComplete():
         _finish();
-        break;
-      case 'status':
-        final t = p['type']?.toString();
-        if (t == 'busy' || t == 'running') {
+      case StatusEvent(:final type):
+        if (type == 'busy' || type == 'running') {
           sending = true;
           notifyListeners();
         } else {
           _finish();
         }
-        break;
-      case 'error':
-      case 'provider-error':
+      case AgentError():
         _finish();
-        break;
-      default:
-        break;
     }
   }
 

@@ -7,6 +7,7 @@ import 'prefs.dart';
 import 'settings_page.dart';
 import 'widgets/session_list.dart';
 import 'widgets/chat_pane.dart';
+import 'l10n/app_localizations.dart';
 
 /// Responsive agent shell mirroring platform/web-app-layout.
 ///   - phone  (<640): single-page chat or session list + bottom NavigationBar
@@ -15,7 +16,13 @@ import 'widgets/chat_pane.dart';
 class HomeShell extends StatefulWidget {
   final String baseUrl;
   final String token;
-  const HomeShell({super.key, required this.baseUrl, required this.token});
+  final Locale? locale;
+  const HomeShell({
+    super.key,
+    required this.baseUrl,
+    required this.token,
+    this.locale,
+  });
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -144,9 +151,13 @@ class _HomeShellState extends State<HomeShell> {
     final layout = AppLayout(MediaQuery.sizeOf(context).width);
     final platformDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
     final isDark = _resolveDark(_store.theme, platformDark);
+    final l = AppLocalizations.of(context);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      locale: widget.locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         brightness: isDark ? Brightness.dark : Brightness.light,
@@ -157,9 +168,9 @@ class _HomeShellState extends State<HomeShell> {
           title: Text(
               layout.isCompact
                   ? (_tab == AgentTab.settings
-                      ? 'Settings'
-                      : (_phoneSession == null ? 'Sessions' : 'Agent'))
-                  : 'Agent',
+                      ? l.theme
+                      : (_phoneSession == null ? l.sessions : l.appName))
+                  : l.appName,
               style: const TextStyle(fontSize: 18)),
           actions: [
             IconButton(icon: const Icon(Icons.palette_outlined), onPressed: _editTheme),
