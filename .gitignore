@@ -3,7 +3,3 @@
 build/
 pubspec.lock
 .gradle/
-.idea/
-.metadata
-agent_app.iml
-.flutter-plugins-dependencies
