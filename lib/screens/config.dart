@@ -256,7 +256,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Widget _toolsDetail() {
-    return _ToolsDetail(api: store.api, providers: _providers);
+    return _ToolsDetail(api: store.api);
   }
 }
 
@@ -1140,8 +1140,7 @@ class _PresetsDetailState extends State<_PresetsDetail> {
 
 class _ToolsDetail extends StatefulWidget {
   final AgentBindApi api;
-  final Map<String, ProviderInfo> providers;
-  const _ToolsDetail({required this.api, required this.providers});
+  const _ToolsDetail({required this.api});
 
   @override
   State<_ToolsDetail> createState() => _ToolsDetailState();
@@ -1152,18 +1151,6 @@ class _ToolsDetailState extends State<_ToolsDetail> {
   Map<String, dynamic> _config = {};
   String? _expanded;
   bool _loading = true;
-  // Own provider map (loaded lazily) so the VLM picker reflects the latest
-  // registered providers even if they changed after the tools page opened.
-  Map<String, ProviderInfo> _providers = {};
-  // Provider/model pickers for VLM tools (image_read): keyed by tool.
-  String? _vlmProvider;
-  String? _vlmModel;
-  bool _vlmLoading = false;
-
-  /// A config knob whose name suggests a model selection (e.g. `vlm_model`)
-  /// renders the provider/model cascade, mirroring the web client.
-  bool isModelRef(String name) => name.toLowerCase().contains('model');
-
   @override
   void initState() {
     super.initState();
@@ -1184,31 +1171,7 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     try {
       _config = await widget.api.toolConfig();
     } catch (_) {}
-    try {
-      _providers = await widget.api.providers();
-    } catch (_) {}
-    // Seed the VLM provider/model cascade from a stored `vlm_model` ref
-    // (provider_id/model_id), mirroring the web client's on-mount behavior.
-    _seedVlmFromConfig();
     setState(() => _loading = false);
-  }
-
-  /// Restore `_vlmProvider`/`_vlmModel` from any `vlm_model` value already
-  /// present in `_config` for the first memory tool that carries it.
-  void _seedVlmFromConfig() {
-    String? provider;
-    String? model;
-    for (final t in _tools) {
-      final v = (_config[t.name] ?? const {})['vlm_model'];
-      if (v is String && v.contains('/')) {
-        final parts = v.split('/');
-        provider = parts[0];
-        model = parts.length > 1 ? parts[1] : '';
-        break;
-      }
-    }
-    _vlmProvider = (provider == null || provider.isEmpty) ? null : provider;
-    _vlmModel = (model == null || model.isEmpty) ? null : model;
   }
 
   @override
@@ -1240,10 +1203,9 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     final colors = colorsOf(context);
     final text = textOf(context);
     final hasConfig = (_config[tool.name] ?? {}).isNotEmpty;
-    // A tool whose owning extension declares config knobs shows editors for
-    // the data-driven set (e.g. memory/vlm_model -> model picker). Model-ref
-    // knobs render a provider/model cascade (even with no providers yet, to
-    // mirror the web client); other knobs render a string/enum editor.
+    // A tool whose owning extension declares config knobs shows a plain text
+    // field per knob that the user fills in (model refs like vlm_model /
+    // image_model are free-form "provider_id/model_id" strings).
     final extConfigs = tool.config ?? [];
     // `required_config` carries the "must be set" semantics: a tool that
     // lists a config here shows the required badge while that value is unset.
@@ -1286,30 +1248,10 @@ class _ToolsDetailState extends State<_ToolsDetail> {
                         style: text.micro
                             .copyWith(color: colors.mutedForeground)),
                   // Data-driven config editors from the extension config.
-                  // A model-ref knob (name contains 'model') always renders
-                  // the provider/model cascade — even when no provider is
-                  // registered yet (mirrors the web client, which shows a
-                  // "Select a provider first" hint). Other knobs use a plain
-                  // string/enum editor.
-                  if (extConfigs.any((c) => isModelRef(c.name))) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(context.l10n.vlmModelLabel,
-                        style: text.meta.copyWith(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: AppSpacing.xs),
-                    _vlmModelPicker(tool.name),
-                    const SizedBox(height: AppSpacing.sm),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton(
-                          onPressed: () => _saveVlmModel(tool.name),
-                          child: Text(context.l10n.save)),
-                    ),
-                  ],
-                  if (extConfigs.any((c) => !isModelRef(c.name)))
-                    for (final c in extConfigs)
-                      if (!isModelRef(c.name))
-                        _extConfigEditor('${tool.category}~${tool.name}', c),
+                  // Every knob renders a plain text field the user fills in
+                  // (model refs like vlm_model / image_model are free-form
+                  // "provider_id/model_id" strings, typed by the user).
+                  for (final c in extConfigs) _extConfigEditor(tool, c),
                   if (tool.params.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Text(context.l10n.toolParams,
@@ -1380,10 +1322,10 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     );
   }
 
-  /// Render an extension config knob that is NOT a model reference — a plain
-  /// string / enum / number editor. Value is saved to the extId config.
-  Widget _extConfigEditor(String toolName, ToolConfig c) {
-    final extId = toolName.split('~').first; // category passed via toolName
+  /// Render an extension config knob — always a plain text field the user
+  /// fills in. Values are saved to the extId (tool.category) config.
+  Widget _extConfigEditor(ToolInfo tool, ToolConfig c) {
+    final extId = tool.category; // the owning extension id
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
       child: Column(
@@ -1392,24 +1334,12 @@ class _ToolsDetailState extends State<_ToolsDetail> {
           if (c.description.isNotEmpty)
             Text(c.description,
                 style: textOf(context).micro.copyWith(color: colorsOf(context).mutedForeground)),
-          if (c.type == 'enum' && c.enumValues.isNotEmpty)
-            DropdownButtonFormField<String>(
-              initialValue: null,
-              decoration: InputDecoration(labelText: c.name),
-              items: [
-                DropdownMenuItem(value: '', child: Text(context.l10n.none)),
-                for (final v in c.enumValues)
-                  DropdownMenuItem(value: v, child: Text(v)),
-              ],
-              onChanged: (v) => _saveExtConfig(extId, c.name, v),
-            )
-          else
-            TextField(
-              decoration: InputDecoration(
-                  labelText: c.name,
-                  helperText: context.l10n.configValueHint),
-              onSubmitted: (v) => _saveExtConfig(extId, c.name, v),
-            ),
+          TextField(
+            decoration: InputDecoration(
+                labelText: c.name,
+                helperText: context.l10n.configValueHint),
+            onSubmitted: (v) => _saveExtConfig(extId, c.name, v),
+          ),
         ],
       ),
     );
@@ -1436,92 +1366,6 @@ class _ToolsDetailState extends State<_ToolsDetail> {
           content: Text('$e',
               style: TextStyle(color: colorsOf(context).destructive))));
     }
-  }
-
-  /// Provider/model cascade for a VLM tool (image_read). The extension config
-  /// knob `vlm_model` holds a `provider_id/model_id` reference; the agent
-  /// resolves it against the registered providers. Rendered as a single
-  /// dropdown over every registered model, labelled "model name —— provider".
-  Widget _vlmModelPicker(String toolName) {
-    // Flatten every registered provider's models into refs provider/model.
-    final refs = <(String, String, String)>[]; // (ref, modelName, provider)
-    for (final e in _providers.entries) {
-      for (final m in e.value.models) {
-        refs.add((
-          '${e.key}/${m.id}',
-          m.name.isNotEmpty ? m.name : m.id,
-          e.key,
-        ));
-      }
-    }
-    final selectedRef =
-        _vlmProvider != null && _vlmModel != null ? '$_vlmProvider/$_vlmModel' : '';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        DropdownButtonFormField<String>(
-          initialValue: selectedRef.isEmpty ? null : selectedRef,
-          decoration: InputDecoration(labelText: context.l10n.modelLabel),
-          items: [
-            DropdownMenuItem(value: '', child: Text(context.l10n.none)),
-            for (final (ref, name, prov) in refs)
-              DropdownMenuItem(value: ref, child: Text('$name —— $prov')),
-          ],
-          onChanged: (v) => setState(() {
-            final r = (v == null || v.isEmpty) ? '' : v;
-            if (r.isEmpty) {
-              _vlmProvider = null;
-              _vlmModel = null;
-            } else {
-              final parts = r.split('/');
-              _vlmProvider = parts[0];
-              _vlmModel = parts.length > 1 ? parts[1] : '';
-            }
-          }),
-        ),
-        if (refs.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: Text(context.l10n.selectProviderFirst,
-                style: textOf(context)
-                    .micro
-                    .copyWith(color: colorsOf(context).mutedForeground)),
-          ),
-      ],
-    );
-  }
-
-  /// Save the VLM model reference (provider_id/model_id) to the extension
-  /// config knob `vlm_model` on the memory extension.
-  Future<void> _saveVlmModel(String toolName) async {
-    if (_vlmProvider == null || _vlmModel == null) return;
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _vlmLoading = true);
-    try {
-      await widget.api.setToolConfigValue(
-        'memory',
-        'vlm_model',
-        '$_vlmProvider/$_vlmModel',
-      );
-      setState(() {
-        // Reflect the saved ref locally so the badge flips to configured
-        // immediately, matching the per-knob `_saveExtConfig` path.
-        for (final t in _tools) {
-          if (t.category != 'memory') continue;
-          final next = <String, dynamic>{
-            ...(_config[t.name] ?? const <String, dynamic>{}),
-            'vlm_model': '$_vlmProvider/$_vlmModel',
-          };
-          _config = {..._config, t.name: next};
-        }
-      });
-      messenger.showSnackBar(
-          SnackBar(content: Text(context.l10n.saved)));
-    } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text('$e', style: TextStyle(color: colorsOf(context).destructive))));
-    }
-    if (mounted) setState(() => _vlmLoading = false);
   }
 
 }
