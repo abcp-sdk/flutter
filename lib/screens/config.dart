@@ -642,14 +642,15 @@ class _AddProviderFormState extends State<_AddProviderForm> {
     setState(() => _registering = false);
   }
 
-  /// Template picker: a dedicated page over the models.dev catalogue (lazy
-  /// load + 1h cache inside [ModelsDev]). Kept as a route so it reads as its
-  /// own screen (the user explicitly wanted pages, not bottom sheets).
+  /// Template picker: a bottom sheet over the models.dev catalogue (lazy
+  /// load + 1h cache inside [ModelsDev]). Kept as a sheet so it stays anchored
+  /// to the provider form (a modal picker, not a tab-level page).
   Future<void> _pickTemplate() async {
-    final picked = await Navigator.of(context).push(
-      MaterialPageRoute<MdProvider>(
-        builder: (_) => const _TemplatePickerPage(),
-      ),
+    final picked = await showModalBottomSheet<MdProvider>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _TemplatePickerSheet(),
     );
     if (picked == null) return;
     setState(() {
@@ -1531,16 +1532,16 @@ class _FoldGroupState extends State<_FoldGroup> {
     );
   }
 }
-/// Searchable models.dev template picker — a dedicated page (Scaffold with
-/// its own AppBar + back), returning the picked [MdProvider].
-class _TemplatePickerPage extends StatefulWidget {
-  const _TemplatePickerPage();
+/// Searchable models.dev template picker — a bottom sheet returning the
+/// picked [MdProvider]. Anchored to the provider form (modal picker).
+class _TemplatePickerSheet extends StatefulWidget {
+  const _TemplatePickerSheet();
 
   @override
-  State<_TemplatePickerPage> createState() => _TemplatePickerPageState();
+  State<_TemplatePickerSheet> createState() => _TemplatePickerSheetState();
 }
 
-class _TemplatePickerPageState extends State<_TemplatePickerPage> {
+class _TemplatePickerSheetState extends State<_TemplatePickerSheet> {
   final _q = TextEditingController();
   List<MdProvider> _all = [];
   bool _loading = true;
@@ -1586,64 +1587,80 @@ class _TemplatePickerPageState extends State<_TemplatePickerPage> {
                 m.name.toLowerCase().contains(q) ||
                 m.id.toLowerCase().contains(q));
           }).toList();
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _q,
-          autofocus: false,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            hintText: context.l10n.providerTemplateHint,
-            border: InputBorder.none,
-          ),
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+              child: TextField(
+                controller: _q,
+                autofocus: false,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: context.l10n.providerTemplateHint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  border: const UnderlineInputBorder(),
+                ),
+              ),
+            ),
+            Flexible(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error.isNotEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error,
+                                  style:
+                                      TextStyle(color: colors.destructive)),
+                              const SizedBox(height: AppSpacing.sm),
+                              TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _loading = true;
+                                      _error = '';
+                                    });
+                                    _load();
+                                  },
+                                  child: Text(context.l10n.back)),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: list.length,
+                          itemBuilder: (_, i) {
+                            final p = list[i];
+                            return ListTile(
+                              title: Text(p.name,
+                                  style: text.meta.copyWith(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text(
+                                  '${p.id} · ${context.l10n.modelsCount('${p.models.length}')}',
+                                  style: text.micro.copyWith(
+                                      color: colors.mutedForeground)),
+                              onTap: () => Navigator.pop(context, p),
+                            );
+                          },
+                        ),
+            ),
+          ],
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error.isNotEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error,
-                          style: TextStyle(color: colors.destructive)),
-                      const SizedBox(height: AppSpacing.sm),
-                      TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _loading = true;
-                              _error = '';
-                            });
-                            _load();
-                          },
-                          child: Text(context.l10n.back)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: list.length,
-                  itemBuilder: (_, i) {
-                    final p = list[i];
-                    return ListTile(
-                      title: Text(p.name,
-                          style: text.meta
-                              .copyWith(fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                          '${p.id} · ${context.l10n.modelsCount('${p.models.length}')}',
-                          style: text.micro.copyWith(
-                              color: colors.mutedForeground)),
-                      trailing: const Icon(Icons.chevron_right_rounded,
-                          size: 18),
-                      onTap: () => Navigator.pop(context, p),
-                    );
-                  },
-                ),
     );
   }
 }
 
 /// Backend manager rendered as a config drill-in (right panel on tablets).
-/// Owns its backend list state; switch/delete/add operate on [Prefs].
+/// Owns its backend list state; switch/delete operate on [Prefs].
 class _BackendsDetail extends StatefulWidget {
   final void Function(BackendCfg)? onSwitched;
   const _BackendsDetail({this.onSwitched});
@@ -1712,10 +1729,8 @@ class _BackendsDetailState extends State<_BackendsDetail> {
           leading: const Icon(Icons.add_rounded),
           title: Text(context.l10n.addBackend),
           onTap: () {
-            // The add flow lands on the setup screen (clears active backend).
             ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(context.l10n.addBackend)));
-            // TODO: route to the setup screen via the store's backend logout.
           },
         ),
       ],
