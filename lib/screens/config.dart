@@ -22,6 +22,9 @@ class ConfigScreen extends StatefulWidget {
   final bool darkMode;
   final ValueChanged<bool> onDarkMode;
   final VoidCallback? onSwitchBackend;
+  /// Switch to another saved backend (rebuilds the whole store). Used by the
+  /// "backend" drill-in on tablets.
+  final void Function(BackendCfg backend)? onBackendSwitched;
   /// When null this is the settings list (stack root); otherwise it renders the
   /// given drill-in page (providers / presets / tools / appearance).
   final String? initialId;
@@ -31,6 +34,7 @@ class ConfigScreen extends StatefulWidget {
     this.darkMode = true,
     required this.onDarkMode,
     this.onSwitchBackend,
+    this.onBackendSwitched,
     this.initialId,
   });
 
@@ -94,6 +98,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return context.l10n.appearance;
       case 'tools':
         return context.l10n.tools;
+      case 'backends':
+        return context.l10n.backendsTitle;
       default:
         return id;
     }
@@ -117,7 +123,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                   fontWeight: FontWeight.w600)),
           trailing: Icon(Icons.chevron_right,
               size: 18, color: colorsOf(context).destructive),
-          onTap: () => widget.onSwitchBackend?.call(),
+          onTap: () => _push('backends'),
         ),
         _SectionHeader(context.l10n.llm),
         _listTile(context, Icons.dns_outlined, 'providers',
@@ -226,6 +232,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return _presetsDetail();
       case 'tools':
         return _toolsDetail();
+      case 'backends':
+        return _BackendsDetail(
+          onSwitched: widget.onBackendSwitched,
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -1628,6 +1638,87 @@ class _TemplatePickerPageState extends State<_TemplatePickerPage> {
                     );
                   },
                 ),
+    );
+  }
+}
+
+/// Backend manager rendered as a config drill-in (right panel on tablets).
+/// Owns its backend list state; switch/delete/add operate on [Prefs].
+class _BackendsDetail extends StatefulWidget {
+  final void Function(BackendCfg)? onSwitched;
+  const _BackendsDetail({this.onSwitched});
+
+  @override
+  State<_BackendsDetail> createState() => _BackendsDetailState();
+}
+
+class _BackendsDetailState extends State<_BackendsDetail> {
+  List<BackendCfg> _backends = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final b = await Prefs.backends();
+    if (mounted) setState(() => _backends = b);
+  }
+
+  Future<void> _delete(BackendCfg b) async {
+    await Prefs.removeBackend(b.baseUrl);
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(context.l10n.saved)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      children: [
+        if (_backends.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(context.l10n.noSavedBackends,
+                style: TextStyle(color: colors.mutedForeground)),
+          ),
+        for (final b in _backends)
+          Card(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: ListTile(
+              leading: const Icon(Icons.dns_outlined,
+                  color: Colors.greenAccent),
+              title: Text(b.name.isNotEmpty ? b.name : b.baseUrl),
+              subtitle: Text(b.baseUrl,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.micro.copyWith(color: colors.mutedForeground)),
+              trailing: IconButton(
+                icon: Icon(Icons.delete_outline_rounded,
+                    size: 18, color: colors.mutedForeground),
+                tooltip: context.l10n.deleteBackend,
+                onPressed: () => _delete(b),
+              ),
+              onTap: () => widget.onSwitched?.call(b),
+            ),
+          ),
+        const Divider(height: 1),
+        ListTile(
+          leading: const Icon(Icons.add_rounded),
+          title: Text(context.l10n.addBackend),
+          onTap: () {
+            // The add flow lands on the setup screen (clears active backend).
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(context.l10n.addBackend)));
+            // TODO: route to the setup screen via the store's backend logout.
+          },
+        ),
+      ],
     );
   }
 }

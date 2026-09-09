@@ -109,25 +109,24 @@ class _EasyLabAppState extends State<EasyLabApp> {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<Locale>(
-      valueListenable: I18n.notifier,
-      builder: (context, locale, _) => MaterialApp(
-        navigatorKey: _navKey,
-        title: I18n.now.appTitle,
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(Brightness.light),
-        darkTheme: buildAppTheme(Brightness.dark),
-        themeMode: _dark ? ThemeMode.dark : ThemeMode.light,
-        locale: locale,
-        supportedLocales: const [Locale('zh'), Locale('en')],
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: _buildHome(),
-      ),
-    );
+        valueListenable: I18n.notifier,
+        builder: (context, locale, _) => MaterialApp(
+          navigatorKey: _navKey,
+          title: I18n.now.appTitle,
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(Brightness.light),
+          darkTheme: buildAppTheme(Brightness.dark),
+          themeMode: _dark ? ThemeMode.dark : ThemeMode.light,
+          locale: locale,
+          supportedLocales: const [Locale('zh'), Locale('en')],
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: _buildHome(),
+        ));
   }
 
   Widget _buildHome() {
@@ -154,7 +153,8 @@ class _EasyLabAppState extends State<EasyLabApp> {
           store: _store!,
           darkMode: _dark,
           onDarkMode: _setDarkMode,
-          onSwitchBackend: _manageBackends);
+          onSwitchBackend: _manageBackends,
+          onBackendSwitched: _switchBackend);
     }
     return FutureBuilder<AppStore>(
       future: _buildStore(),
@@ -167,7 +167,8 @@ class _EasyLabAppState extends State<EasyLabApp> {
             store: snap.data!,
             darkMode: _dark,
             onDarkMode: _setDarkMode,
-            onSwitchBackend: _manageBackends);
+            onSwitchBackend: _manageBackends,
+            onBackendSwitched: _switchBackend);
       },
     );
   }
@@ -186,11 +187,13 @@ class _Shell extends StatelessWidget {
   final bool darkMode;
   final ValueChanged<bool> onDarkMode;
   final VoidCallback? onSwitchBackend;
+  final void Function(BackendCfg)? onBackendSwitched;
   const _Shell({
       required this.store,
       required this.darkMode,
       required this.onDarkMode,
-      this.onSwitchBackend});
+      this.onSwitchBackend,
+      this.onBackendSwitched});
 
   static const _navItems = <(SiderTab, IconData, String)>[
     (SiderTab.chat, Icons.chat_bubble_outline, 'tabChat'),
@@ -241,7 +244,8 @@ class _Shell extends StatelessWidget {
         lastCount: 1,
         darkMode: darkMode,
         onDarkMode: onDarkMode,
-        onSwitchBackend: onSwitchBackend);
+        onSwitchBackend: onSwitchBackend,
+        onBackendSwitched: onBackendSwitched);
     return PopScope(
       canPop: !store.canPopPage,
       onPopInvokedWithResult: (didPop, _) {
@@ -263,7 +267,8 @@ class _Shell extends StatelessWidget {
         lastCount: 2,
         darkMode: darkMode,
         onDarkMode: onDarkMode,
-        onSwitchBackend: onSwitchBackend);
+        onSwitchBackend: onSwitchBackend,
+        onBackendSwitched: onBackendSwitched);
     return Row(
       children: [
         for (final p in pages) Expanded(child: p),
