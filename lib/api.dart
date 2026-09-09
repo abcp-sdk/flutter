@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:agent_client_sdk/agent_client_sdk.dart' as sdk;
+import 'package:connectrpc/protobuf.dart';
+import 'package:connectrpc/protocol/connect.dart' as protocol;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart' as wkt;
 
 import 'models.dart';
@@ -20,6 +22,12 @@ class StreamEvent {
   String str(String key) => params[key] as String? ?? '';
 }
 
+/// CA certificate (PEM) used on native HTTP/2-TLS. Ignored on web.
+class AgentTls {
+  const AgentTls({this.caPem});
+  final String? caPem;
+}
+
 /// Thin client over a standalone abc agent: the typed agent.v1 client over
 /// HTTP/2-TLS (self-signed CA). Talks directly to agent.v1.AgentService — no
 /// gateway, no lab/ops/registry.
@@ -27,24 +35,38 @@ class AgentBindApi {
   final String baseUrl;
   final String token;
 
-  // Strong-typed Connect client (h2 over TLS), direct to the agent.
+  // Strong-typed Connect client (h2 over TLS), direct to the agent. The
+  // transport is built here per the connectrpc convention (caller owns it);
+  // the SDK supplies only the generated client + buildHttpClient primitive.
   late final sdk.AgentServiceClient _agent;
 
   AgentBindApi({required this.baseUrl, required this.token})
-      : _agent =
-            sdk.createAgentClient(baseUrl: baseUrl, token: token, tls: _tls);
+      : _agent = _buildAgent(baseUrl, token);
 
-  static sdk.AgentTls? _tls;
+  static AgentTls? _tls;
   static Future<void> _loadCa() async {
     if (_tls != null) return;
     try {
       final data = await rootBundle.load('assets/certs/ca.crt');
-      _tls = sdk.AgentTls(
+      _tls = AgentTls(
           caPem: utf8.decode(
               data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes)));
     } catch (_) {
       _tls = null;
     }
+  }
+
+  /// Build the connect Transport for a base URL + bearer token + CA.
+  static sdk.AgentServiceClient _buildAgent(String baseUrl, String token) {
+    final trimmed =
+        baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final transport = protocol.Transport(
+      baseUrl: trimmed,
+      codec: const ProtoCodec(),
+      httpClient: sdk.buildHttpClient(caPem: _tls?.caPem),
+      interceptors: [if (token.isNotEmpty) sdk.bearerInterceptor(token)],
+    );
+    return sdk.AgentServiceClient(transport);
   }
 
   static Future<AgentBindApi> create(
@@ -396,7 +418,6 @@ class StructUtils {
         return v.listValue.values.map(valueToJson).toList();
       case wkt.Value_Kind.nullValue:
       case wkt.Value_Kind.notSet:
-      default:
         return null;
     }
   }
