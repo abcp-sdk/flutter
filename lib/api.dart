@@ -264,8 +264,9 @@ class AgentBindApi {
     return r.models.map((m) => ModelInfo(id: m.id, name: m.name)).toList();
   }
 
-  Future<List<Preset>> presets() async {
-    final r = await _agent.listPresets(sdk.ListPresetsRequest());
+  Future<List<Preset>> presets({String? locale}) async {
+    final r = await _agent
+        .listPresets(sdk.ListPresetsRequest(locale: locale ?? ''));
     return r.presets.map((p) => Preset(
           id: p.id,
           systemPrompt: p.systemPrompt,

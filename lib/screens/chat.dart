@@ -10,6 +10,7 @@ import '../enums.dart';
 import '../navigation.dart';
 import '../messages.dart';
 import '../models.dart';
+import '../prefs.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dialogs.dart';
@@ -74,7 +75,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       _models = await widget.store.api.models();
     } catch (_) {}
     try {
-      _presets = await widget.store.api.presets();
+      _presets = await widget.store.api.presets(
+          locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh));
     } catch (_) {}
     if (mounted) setState(() {});
     // Do NOT hijack store.codeOrg/codeRepo here: the Code tab is an
