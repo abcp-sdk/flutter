@@ -12,6 +12,7 @@ import '../messages.dart';
 import '../models.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/message_bubble.dart';
 
 /// Conversation page shown when a session is open. Owns the chat header,
@@ -471,11 +472,12 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 itemBuilder: (context) => [
                   PopupMenuItem(value: 'settings', child: Text(context.l10n.sessionSettings)),
                   PopupMenuItem(value: 'compact', child: Text(context.l10n.compactHistory)),
-                  PopupMenuItem(value: 'timeline', child: Text(context.l10n.timeline)),
-                  PopupMenuItem(value: 'files', child: Text(context.l10n.files)),
                   PopupMenuItem(value: 'mailbox', child: Text(context.l10n.mailbox)),
-                   PopupMenuItem(value: 'container', child: Text(context.l10n.container)),
-                   const PopupMenuDivider(),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'fork',
+                    child: Text(context.l10n.fork),
+                  ),
                   PopupMenuItem(
                     value: 'delete',
                     child: Text(context.l10n.deleteSession,
@@ -498,6 +500,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         _compact();
       case 'mailbox':
         _openOverlay(SessionOverlay.mailbox);
+      case 'fork':
+        _forkSession();
       case 'delete':
         _deleteSession();
     }
@@ -542,6 +546,23 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         await store.deleteSession(sid);
       }
       store.closeSession();
+    }
+  }
+
+  Future<void> _forkSession() async {
+    final sid = store.activeSessionId;
+    if (sid == null) return;
+    final name = await promptDialog(context, title: context.l10n.fork);
+    if (name == null || name.trim().isEmpty) return;
+    try {
+      final s = await store.api.fork(sid, name.trim());
+      if (!mounted) return;
+      store.activeSessionId = s.id;
+      await store.refreshSessions();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.l10n.failed('$e'))));
     }
   }
 

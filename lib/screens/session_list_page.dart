@@ -58,13 +58,6 @@ class _SessionListPageState extends State<SessionListPage> {
     await store.refreshSessions();
   }
 
-  Future<void> _fork(Session s) async {
-    final name = await promptDialog(context, title: context.l10n.fork);
-    if (name == null || name.trim().isEmpty) return;
-    await store.api.fork(s.id, name.trim());
-    await store.refreshSessions();
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
@@ -132,22 +125,6 @@ class _SessionListPageState extends State<SessionListPage> {
                             ? null
                             : Text(s.lastMessagePreview,
                                 maxLines: 1, overflow: TextOverflow.ellipsis),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (v) {
-                            if (v == 'fork') _fork(s);
-                            if (v == 'delete') {
-                              store.deleteSession(s.id);
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                                value: 'fork',
-                                child: Text(context.l10n.fork)),
-                            PopupMenuItem(
-                                value: 'delete',
-                                child: Text(context.l10n.deleteSession)),
-                          ],
-                        ),
                         onTap: () => store.pickSession(s.id),
                       );
                     },
