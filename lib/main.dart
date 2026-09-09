@@ -10,7 +10,7 @@ import 'prefs.dart';
 import 'store.dart';
 import 'theme/app_theme.dart';
 
-const defaultBaseUrl = 'https://easylab.temp.10.199.64.20.nip.io';
+const defaultBaseUrl = 'https://standalone-agent.temp.10.199.64.20.nip.io';
 
 void main() {
   runApp(const EasyLabApp());
