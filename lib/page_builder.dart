@@ -18,16 +18,18 @@ Widget buildPage(AppStore store, AppPage page,
     required VoidCallback? onSwitchBackend}) {
   switch (page) {
     case ChatListPage():
-      return SessionListPage(store: store);
+      return SessionListPage(key: ValueKey(page.key), store: store);
     case ChatSessionPage():
-      return ChatSessionPageWidget(store: store);
+      return ChatSessionPageWidget(key: ValueKey(page.key), store: store);
     case ChatOverlayPage(:final overlay):
-      return ChatOverlayPageWidget(store: store, overlay: overlay);
+      return ChatOverlayPageWidget(key: ValueKey(page.key), store: store, overlay: overlay);
     case ConfigRootPage():
       return ConfigScreen(
+          key: ValueKey(page.key),
           store: store, darkMode: darkMode, onDarkMode: onDarkMode, onSwitchBackend: onSwitchBackend);
     case ConfigSubPage(:final id):
       return ConfigScreen(
+          key: ValueKey(page.key),
           store: store, darkMode: darkMode, onDarkMode: onDarkMode, onSwitchBackend: onSwitchBackend, initialId: id);
   }
 }

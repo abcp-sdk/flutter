@@ -7,7 +7,7 @@
   "connect": "Connect",
   "connecting": "Connecting...",
   "search": "Search",
-  "searchHint": "Search sessions / org / repo / branch",
+  "searchHint": "Search session name",
   "createNewOrg": "New organization",
   "createNewRepo": "New repo…",
   "createCloneRepo": "Clone repo…",

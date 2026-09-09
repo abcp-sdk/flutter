@@ -28,7 +28,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get search => '搜索';
 
   @override
-  String get searchHint => '搜索会话 / org / repo / 分支';
+  String get searchHint => '搜索会话名称';
 
   @override
   String get createNewOrg => '新建组织';

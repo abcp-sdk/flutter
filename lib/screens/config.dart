@@ -629,12 +629,16 @@ class _AddProviderFormState extends State<_AddProviderForm> {
     setState(() => _registering = false);
   }
 
-  /// Template picker: searchable full-screen sheet over the models.dev
-  /// catalogue (lazy load + 1h cache inside [ModelsDev]).
+  /// Template picker: a bottom sheet over the models.dev catalogue (lazy
+  /// load + 1h cache inside [ModelsDev]). Kept as a sheet so on tablets it
+  /// stays within the provider detail (no full-screen route).
   Future<void> _pickTemplate() async {
-    final picked = await Navigator.of(context).push(MaterialPageRoute<MdProvider>(
-      builder: (_) => const _TemplatePickerPage(),
-    ));
+    final picked = await showModalBottomSheet<MdProvider>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _TemplatePickerSheet(),
+    );
     if (picked == null) return;
     setState(() {
       _template = picked;
@@ -1322,26 +1326,15 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     );
   }
 
-  /// Render an extension config knob — always a plain text field the user
-  /// fills in. Values are saved to the extId (tool.category) config.
+  /// Render an extension config knob — a plain text field + an explicit
+  /// "Save" button (no enter-to-save surprise). Value is saved to the extId
+  /// (tool.category) config.
   Widget _extConfigEditor(ToolInfo tool, ToolConfig c) {
     final extId = tool.category; // the owning extension id
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (c.description.isNotEmpty)
-            Text(c.description,
-                style: textOf(context).micro.copyWith(color: colorsOf(context).mutedForeground)),
-          TextField(
-            decoration: InputDecoration(
-                labelText: c.name,
-                helperText: context.l10n.configValueHint),
-            onSubmitted: (v) => _saveExtConfig(extId, c.name, v),
-          ),
-        ],
-      ),
+    return _ConfigTextField(
+      label: c.name,
+      description: c.description,
+      onSave: (v) => _saveExtConfig(extId, c.name, v),
     );
   }
 
@@ -1368,6 +1361,60 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     }
   }
 
+}
+
+/// A labelled config text field with an explicit Save button.
+class _ConfigTextField extends StatefulWidget {
+  final String label;
+  final String description;
+  final ValueChanged<String> onSave;
+  const _ConfigTextField({
+    required this.label,
+    required this.description,
+    required this.onSave,
+  });
+
+  @override
+  State<_ConfigTextField> createState() => _ConfigTextFieldState();
+}
+
+class _ConfigTextFieldState extends State<_ConfigTextField> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.description.isNotEmpty)
+            Text(widget.description,
+                style: text.micro.copyWith(color: colors.mutedForeground)),
+          TextField(
+            controller: _controller,
+            decoration: InputDecoration(labelText: widget.label),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonal(
+              onPressed: () => widget.onSave(_controller.text),
+              child: Text(context.l10n.save),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Deep-parameter group: collapsed inline summary, tap to expand, tap again
@@ -1473,14 +1520,14 @@ class _FoldGroupState extends State<_FoldGroup> {
   }
 }
 /// Searchable models.dev template picker (full-screen page).
-class _TemplatePickerPage extends StatefulWidget {
-  const _TemplatePickerPage();
+class _TemplatePickerSheet extends StatefulWidget {
+  const _TemplatePickerSheet();
 
   @override
-  State<_TemplatePickerPage> createState() => _TemplatePickerPageState();
+  State<_TemplatePickerSheet> createState() => _TemplatePickerSheetState();
 }
 
-class _TemplatePickerPageState extends State<_TemplatePickerPage> {
+class _TemplatePickerSheetState extends State<_TemplatePickerSheet> {
   final _q = TextEditingController();
   List<MdProvider> _all = [];
   bool _loading = true;
@@ -1526,58 +1573,74 @@ class _TemplatePickerPageState extends State<_TemplatePickerPage> {
                 m.name.toLowerCase().contains(q) ||
                 m.id.toLowerCase().contains(q));
           }).toList();
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _q,
-          autofocus: false,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            hintText: context.l10n.providerTemplateHint,
-            border: InputBorder.none,
-          ),
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+              child: TextField(
+                controller: _q,
+                autofocus: false,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: context.l10n.providerTemplateHint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  border: const UnderlineInputBorder(),
+                ),
+              ),
+            ),
+            Flexible(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error.isNotEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error,
+                                  style:
+                                      TextStyle(color: colors.destructive)),
+                              const SizedBox(height: AppSpacing.sm),
+                              TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _loading = true;
+                                      _error = '';
+                                    });
+                                    _load();
+                                  },
+                                  child: Text(context.l10n.back)),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: list.length,
+                          itemBuilder: (_, i) {
+                            final p = list[i];
+                            return ListTile(
+                              title: Text(p.name,
+                                  style: text.meta.copyWith(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text(
+                                  '${p.id} · ${context.l10n.modelsCount('${p.models.length}')}',
+                                  style: text.micro.copyWith(
+                                      color: colors.mutedForeground)),
+                              onTap: () => Navigator.pop(context, p),
+                            );
+                          },
+                        ),
+            ),
+          ],
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error.isNotEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error,
-                          style: TextStyle(color: colors.destructive)),
-                      const SizedBox(height: AppSpacing.sm),
-                      TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _loading = true;
-                              _error = '';
-                            });
-                            _load();
-                          },
-                          child: Text(context.l10n.back)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: list.length,
-                  itemBuilder: (_, i) {
-                    final p = list[i];
-                    return ListTile(
-                      title: Text(p.name,
-                          style: text.meta
-                              .copyWith(fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                          '${p.id} · ${context.l10n.modelsCount('${p.models.length}')}',
-                          style: text.micro.copyWith(
-                              color: colors.mutedForeground)),
-                      trailing: const Icon(Icons.chevron_right_rounded,
-                          size: 18),
-                      onTap: () => Navigator.pop(context, p),
-                    );
-                  },
-                ),
     );
   }
 }

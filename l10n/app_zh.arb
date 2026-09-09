@@ -7,7 +7,7 @@
   "connect": "连接",
   "connecting": "连接中…",
   "search": "搜索",
-  "searchHint": "搜索会话 / org / repo / 分支",
+  "searchHint": "搜索会话名称",
   "createNewOrg": "新建组织",
   "createNewRepo": "新建仓库…",
   "createCloneRepo": "克隆仓库…",

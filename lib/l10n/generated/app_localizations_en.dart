@@ -28,7 +28,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get search => 'Search';
 
   @override
-  String get searchHint => 'Search sessions / org / repo / branch';
+  String get searchHint => 'Search session name';
 
   @override
   String get createNewOrg => 'New organization';

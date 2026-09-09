@@ -137,7 +137,7 @@ abstract class AppLocalizations {
   /// No description provided for @searchHint.
   ///
   /// In zh, this message translates to:
-  /// **'搜索会话 / org / repo / 分支'**
+  /// **'搜索会话名称'**
   String get searchHint;
 
   /// No description provided for @createNewOrg.
