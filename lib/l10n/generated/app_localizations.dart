@@ -1826,6 +1826,18 @@ abstract class AppLocalizations {
   /// **'输入参数'**
   String get toolInputParams;
 
+  /// No description provided for @content.
+  ///
+  /// In zh, this message translates to:
+  /// **'内容'**
+  String get content;
+
+  /// No description provided for @metadata.
+  ///
+  /// In zh, this message translates to:
+  /// **'元数据'**
+  String get metadata;
+
   /// No description provided for @newSession.
   ///
   /// In zh, this message translates to:

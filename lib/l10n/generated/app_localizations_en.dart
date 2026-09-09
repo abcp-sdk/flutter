@@ -958,6 +958,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolInputParams => 'Input';
 
   @override
+  String get content => 'Content';
+
+  @override
+  String get metadata => 'Metadata';
+
+  @override
   String get newSession => 'New session';
 
   @override

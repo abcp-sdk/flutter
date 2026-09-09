@@ -575,6 +575,8 @@
   "connected": "Connected",
   "connectionError": "Connection error: {arg1}",
   "toolInputParams": "Input",
+  "content": "Content",
+  "metadata": "Metadata",
   "newSession": "New session",
   "noSessions": "No sessions"
 }

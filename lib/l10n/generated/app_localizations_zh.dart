@@ -952,6 +952,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolInputParams => '输入参数';
 
   @override
+  String get content => '内容';
+
+  @override
+  String get metadata => '元数据';
+
+  @override
   String get newSession => '新会话';
 
   @override

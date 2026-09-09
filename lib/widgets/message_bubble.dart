@@ -53,10 +53,9 @@ class _FileAttachment extends StatelessWidget {
         final where = await DownloadService(api).download(
           path: code,
           displayName: part.name ?? code,
-          mimeType: mime ?? 'application/octet-stream',
+          mimeType: mime,
         );
         if (!context.mounted) return;
-        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(context.l10n.savedToDownloads(where)),
           duration: const Duration(seconds: 2),
@@ -432,7 +431,6 @@ class MessageBubble extends StatelessWidget {
         parts.add(ToolPartView(
           part: part,
           isStreaming: isStreaming,
-          onOpenChange: onOpenChange,
         ));
       } else if (part.type == 'compaction') {
         parts.add(_CompactionBlock(text: part.text));

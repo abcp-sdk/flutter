@@ -575,6 +575,8 @@
   "connected": "已连接",
   "connectionError": "连接错误：{arg1}",
   "toolInputParams": "输入参数",
+  "content": "内容",
+  "metadata": "元数据",
   "newSession": "新会话",
   "noSessions": "暂无会话"
 }
