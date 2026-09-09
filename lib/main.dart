@@ -83,84 +83,24 @@ class _EasyLabAppState extends State<EasyLabApp> {
     }
   }
 
-  /// Backend manager sheet: switch / delete saved backends, or add a new
-  /// one (which lands on the setup screen). The active backend is marked.
+  /// Backend manager: a dedicated page to switch / delete saved backends, or
+  /// add a new one (which lands on the setup screen). The active backend is
+  /// marked. Kept as a route (not a bottom sheet) so it feels like a page.
   Future<void> _manageBackends() async {
     final backends = await Prefs.backends();
     final navCtx = _navKey.currentContext;
     if (navCtx == null || !navCtx.mounted) return;
-    await showModalBottomSheet<void>(
-      context: navCtx,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Text(ctx.l10n.backendsTitle,
-                  style: textOf(ctx)
-                      .meta
-                      .copyWith(fontWeight: FontWeight.w600)),
-            ),
-            Flexible(
-              child: backends.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Text(ctx.l10n.noSavedBackends,
-                          style: TextStyle(
-                              color: colorsOf(ctx).mutedForeground)),
-                    )
-                  : ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final b in backends)
-                          ListTile(
-                            leading: Icon(
-                              _baseUrl == b.baseUrl
-                                  ? Icons.radio_button_checked
-                                  : Icons.dns_outlined,
-                              color: _baseUrl == b.baseUrl
-                                  ? colorsOf(ctx).primary
-                                  : colorsOf(ctx).mutedForeground,
-                            ),
-                            title: Text(b.name.isNotEmpty ? b.name : b.baseUrl),
-                            subtitle: Text(b.baseUrl,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textOf(ctx)
-                                    .micro
-                                    .copyWith(
-                                        color: colorsOf(ctx).mutedForeground)),
-                            trailing: IconButton(
-                              icon: Icon(Icons.delete_outline_rounded,
-                                  size: 18,
-                                  color: colorsOf(ctx).mutedForeground),
-                              tooltip: ctx.l10n.deleteBackend,
-                              onPressed: () async {
-                                await Prefs.removeBackend(b.baseUrl);
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                _manageBackends();
-                              },
-                            ),
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              _switchBackend(b);
-                            },
-                          ),
-                      ],
-                    ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.add_rounded),
-              title: Text(ctx.l10n.addBackend),
-              onTap: () {
-                Navigator.pop(ctx);
-                _logout();
-              },
-            ),
-          ],
+    await Navigator.of(navCtx).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _BackendsPage(
+          backends: backends,
+          activeBase: _baseUrl,
+          onSwitch: (b) {
+            _switchBackend(b);
+          },
+          onLogout: () {
+            _logout();
+          },
         ),
       ),
     );
@@ -432,6 +372,101 @@ class _SetupScreenState extends State<_SetupScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Dedicated page for managing saved backends (switch / delete / add). Unlike
+/// a bottom sheet, it's a full route so it reads as its own screen.
+class _BackendsPage extends StatefulWidget {
+  final List<BackendCfg> backends;
+  final String? activeBase;
+  final void Function(BackendCfg) onSwitch;
+  final VoidCallback onLogout;
+  const _BackendsPage({
+    required this.backends,
+    required this.activeBase,
+    required this.onSwitch,
+    required this.onLogout,
+  });
+
+  @override
+  State<_BackendsPage> createState() => _BackendsPageState();
+}
+
+class _BackendsPageState extends State<_BackendsPage> {
+  late List<BackendCfg> _backends;
+
+  @override
+  void initState() {
+    super.initState();
+    _backends = [...widget.backends];
+  }
+
+  Future<void> _delete(BackendCfg b) async {
+    await Prefs.removeBackend(b.baseUrl);
+    if (!mounted) return;
+    setState(() => _backends.removeWhere((e) => e.baseUrl == b.baseUrl));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.saved)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(context.l10n.backendsTitle)),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          if (_backends.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(context.l10n.noSavedBackends,
+                  style: TextStyle(color: colors.mutedForeground)),
+            ),
+          for (final b in _backends)
+            Card(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: ListTile(
+                leading: Icon(
+                  widget.activeBase == b.baseUrl
+                      ? Icons.radio_button_checked
+                      : Icons.dns_outlined,
+                  color: widget.activeBase == b.baseUrl
+                      ? colors.primary
+                      : colors.mutedForeground,
+                ),
+                title: Text(b.name.isNotEmpty ? b.name : b.baseUrl),
+                subtitle: Text(b.baseUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        text.micro.copyWith(color: colors.mutedForeground)),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete_outline_rounded,
+                      size: 18, color: colors.mutedForeground),
+                  tooltip: context.l10n.deleteBackend,
+                  onPressed: () => _delete(b),
+                ),
+                onTap: () {
+                  widget.onSwitch(b);
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.add_rounded),
+            title: Text(context.l10n.addBackend),
+            onTap: () {
+              Navigator.pop(context);
+              widget.onLogout();
+            },
+          ),
+        ],
       ),
     );
   }
