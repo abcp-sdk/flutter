@@ -128,6 +128,12 @@ abstract class AppLocalizations {
   /// **'Rename'**
   String get rename;
 
+  /// No description provided for @fork.
+  ///
+  /// In en, this message translates to:
+  /// **'Fork'**
+  String get fork;
+
   /// No description provided for @delete.
   ///
   /// In en, this message translates to:

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'prefs.dart';
+import 'widgets/settings_pane.dart';
 
-/// Configuration page: baseUrl (https://) + bearer token. Save persists via
-/// SharedPreferences; onSaved returns the config to the shell.
+/// Full-page configuration screen (first run, or the "edit config" push).
+/// Builds the settings form with a back affordance.
 class SettingsPage extends StatefulWidget {
   final String? baseUrl;
   final String? token;
@@ -15,63 +15,16 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late final TextEditingController _url = TextEditingController(text: widget.baseUrl ?? '');
-  late final TextEditingController _token = TextEditingController(text: widget.token ?? '');
-
-  @override
-  void dispose() {
-    _url.dispose();
-    _token.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final url = _url.text.trim();
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('baseUrl is required')));
-      return;
-    }
-    await Prefs.save(url, _token.text.trim());
-    await widget.onSaved?.call(url, _token.text.trim());
-    if (mounted) Navigator.of(context).maybePop();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Agent base URL (https://...)'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _url,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'https://agent.example.com',
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Bearer token'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _token,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'devtoken',
-              ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _save,
-              child: const Text('Save'),
-            ),
-          ],
+        child: SettingsPane(
+          baseUrl: widget.baseUrl,
+          token: widget.token,
+          onSaved: widget.onSaved,
         ),
       ),
     );

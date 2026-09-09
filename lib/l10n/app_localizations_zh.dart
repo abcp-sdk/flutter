@@ -24,6 +24,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get rename => '重命名';
 
   @override
+  String get fork => '派生';
+
+  @override
   String get delete => '删除';
 
   @override

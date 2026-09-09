@@ -256,6 +256,11 @@ class AgentStore extends ChangeNotifier {
     await refreshSessions();
   }
 
+  Future<void> forkSession(String id, String name) async {
+    await api.forkSession(id, name);
+    await refreshSessions();
+  }
+
   Future<List<sdk.ModelInfo>> models() => api.listModels();
   Future<List<sdk.Preset>> presets() => api.listPresets();
   Future<void> switchModel(String m) => api.switchModel(activeId, m);

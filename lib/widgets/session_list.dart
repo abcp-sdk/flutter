@@ -9,6 +9,7 @@ class SessionListPane extends StatelessWidget {
   final void Function(String id) onSelect;
   final VoidCallback onCreate;
   final void Function(String id) onRename;
+  final void Function(String id) onFork;
   final void Function(String id) onDelete;
 
   const SessionListPane({
@@ -17,6 +18,7 @@ class SessionListPane extends StatelessWidget {
     required this.onSelect,
     required this.onCreate,
     required this.onRename,
+    required this.onFork,
     required this.onDelete,
   });
 
@@ -50,10 +52,12 @@ class SessionListPane extends StatelessWidget {
                       onTap: () => onSelect(s.id),
                       trailing: PopupMenuButton<String>(
                         onSelected: (v) {
+                          if (v == 'fork') onFork(s.id);
                           if (v == 'rename') onRename(s.id);
                           if (v == 'delete') onDelete(s.id);
                         },
                         itemBuilder: (_) => [
+                          PopupMenuItem(value: 'fork', child: Text(l.fork)),
                           PopupMenuItem(value: 'rename', child: Text(l.rename)),
                           PopupMenuItem(value: 'delete', child: Text(l.delete)),
                         ],

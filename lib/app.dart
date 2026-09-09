@@ -7,6 +7,7 @@ import 'prefs.dart';
 import 'settings_page.dart';
 import 'widgets/session_list.dart';
 import 'widgets/chat_pane.dart';
+import 'widgets/settings_pane.dart';
 import 'l10n/app_localizations.dart';
 
 /// Responsive agent shell mirroring platform/web-app-layout.
@@ -38,8 +39,16 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _api = AgentApi(baseUrl: widget.baseUrl, token: widget.token);
-    _store = AgentStore(api: _api);
+    _init();
+  }
+
+  Future<void> _init() async {
+    final api = await AgentApi.create(baseUrl: widget.baseUrl, token: widget.token);
+    if (!mounted) return;
+    setState(() {
+      _api = api;
+      _store = AgentStore(api: api);
+    });
   }
 
   @override
@@ -58,8 +67,10 @@ class _HomeShellState extends State<HomeShell> {
     ));
     final p = await Prefs.load();
     if (!mounted) return;
+    final api = await AgentApi.create(baseUrl: p.baseUrl, token: p.token);
+    if (!mounted) return;
     setState(() {
-      _api = AgentApi(baseUrl: p.baseUrl, token: p.token);
+      _api = api;
       _store.dispose();
       _store = AgentStore(api: _api);
       _phoneSession = null;
@@ -95,15 +106,21 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _create() async {
-    final name = await _prompt('New session');
-    if (name == null) return;
+    final name = await _prompt(AppLocalizations.of(context).newSession);
+    if (name == null || name.isEmpty) return;
     await _store.createSession(name: name);
   }
 
   Future<void> _rename(String id) async {
-    final v = await _prompt('Rename session', initial: id);
+    final v = await _prompt(AppLocalizations.of(context).rename, initial: id);
     if (v == null || v.isEmpty) return;
     await _store.renameSession(id, v);
+  }
+
+  Future<void> _fork(String id) async {
+    final v = await _prompt(AppLocalizations.of(context).fork);
+    if (v == null || v.isEmpty) return;
+    await _store.forkSession(id, v);
   }
 
   Future<void> _delete(String id) async {
@@ -138,6 +155,7 @@ class _HomeShellState extends State<HomeShell> {
       onSelect: _select,
       onCreate: _create,
       onRename: _rename,
+      onFork: _fork,
       onDelete: _delete,
     );
   }
@@ -148,10 +166,10 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final layout = AppLayout(MediaQuery.sizeOf(context).width);
     final platformDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
     final isDark = _resolveDark(_store.theme, platformDark);
-    final l = AppLocalizations.of(context);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -173,6 +191,12 @@ class _HomeShellState extends State<HomeShell> {
                   : l.appName,
               style: const TextStyle(fontSize: 18)),
           actions: [
+            if (_tab == AgentTab.chat && _phoneSession == null)
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: l.newSession,
+                onPressed: _create,
+              ),
             IconButton(icon: const Icon(Icons.palette_outlined), onPressed: _editTheme),
             IconButton(icon: const Icon(Icons.settings_outlined), onPressed: _openSettings),
           ],
@@ -193,9 +217,25 @@ class _HomeShellState extends State<HomeShell> {
   Widget _phoneBody(AppLayout layout) {
     if (!layout.isCompact) return _splitBody(layout);
     if (_tab == AgentTab.settings) {
+      // Settings pane: baseUrl/token config (+ theme from the app bar).
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(children: [const Text('Settings (theme in app bar)')]),
+        child: SettingsPane(
+          baseUrl: widget.baseUrl,
+          token: widget.token,
+          onSaved: (b, t) async {
+            await Prefs.save(b, t);
+            if (!mounted) return;
+            final api = await AgentApi.create(baseUrl: b, token: t);
+            if (!mounted) return;
+            setState(() {
+              _api = api;
+              _store.dispose();
+              _store = AgentStore(api: _api);
+              _phoneSession = null;
+            });
+          },
+        ),
       );
     }
     if (_phoneSession == null) return _sessionList();
@@ -212,7 +252,22 @@ class _HomeShellState extends State<HomeShell> {
     if (_tab == AgentTab.settings) {
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(children: [const Text('Settings (theme in app bar)')]),
+        child: SettingsPane(
+          baseUrl: widget.baseUrl,
+          token: widget.token,
+          onSaved: (b, t) async {
+            await Prefs.save(b, t);
+            if (!mounted) return;
+            final api = await AgentApi.create(baseUrl: b, token: t);
+            if (!mounted) return;
+            setState(() {
+              _api = api;
+              _store.dispose();
+              _store = AgentStore(api: _api);
+              _phoneSession = null;
+            });
+          },
+        ),
       );
     }
     if (_phoneSession == null) {

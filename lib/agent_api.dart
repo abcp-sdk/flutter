@@ -1,7 +1,28 @@
 import 'dart:convert';
 
 import 'package:agent_client_sdk/agent_client_sdk.dart' as sdk;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart' as wkt;
+
+/// Loads the bundled self-signed CA (assets/certs/ca.crt) so the app can talk
+/// to a standalone agent over HTTP/2-TLS. Cached across calls.
+class AgentCa {
+  static String? _pem;
+  static Future<String?> load() async {
+    if (_pem != null) return _pem;
+    try {
+      final data = await rootBundle.load('assets/certs/ca.crt');
+      _pem = utf8.decode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+    } catch (_) {
+      _pem = null;
+    }
+    return _pem;
+  }
+  static Future<sdk.AgentTls?> tls() async {
+    final pem = await load();
+    return pem == null ? null : sdk.AgentTls(caPem: pem);
+  }
+}
 
 /// A parsed watch/prompt stream event.
 class StreamEvent {
@@ -112,8 +133,15 @@ class AgentApi {
   final String token;
   final sdk.AgentClient _client;
 
-  AgentApi({required this.baseUrl, required this.token})
-      : _client = sdk.AgentClient(baseUrl: baseUrl, token: token);
+  AgentApi({required this.baseUrl, required this.token, sdk.AgentTls? tls})
+      : _client = sdk.AgentClient(baseUrl: baseUrl, token: token, tls: tls);
+
+  /// Builds an AgentApi trusting the bundled CA (for a self-signed agent).
+  static Future<AgentApi> create(
+      {required String baseUrl, required String token}) async {
+    final tls = await AgentCa.tls();
+    return AgentApi(baseUrl: baseUrl, token: token, tls: tls);
+  }
 
   sdk.AgentServiceClient get agent => _client.agent;
 

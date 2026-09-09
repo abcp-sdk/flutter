@@ -24,6 +24,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rename => 'Rename';
 
   @override
+  String get fork => 'Fork';
+
+  @override
   String get delete => 'Delete';
 
   @override
