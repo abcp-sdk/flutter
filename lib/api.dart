@@ -28,13 +28,11 @@ class AgentBindApi {
   final String token;
 
   // Strong-typed Connect client (h2 over TLS), direct to the agent.
-  late final sdk.AgentClient _sdk;
   late final sdk.AgentServiceClient _agent;
 
   AgentBindApi({required this.baseUrl, required this.token})
-      : _sdk = sdk.AgentClient(baseUrl: baseUrl, token: token, tls: _tls) {
-    _agent = _sdk.agent;
-  }
+      : _agent =
+            sdk.createAgentClient(baseUrl: baseUrl, token: token, tls: _tls);
 
   static sdk.AgentTls? _tls;
   static Future<void> _loadCa() async {
@@ -195,7 +193,8 @@ class AgentBindApi {
   // ---- stream ----
 
   Stream<StreamEvent> streamEvents(String sessionId) {
-    final sdkStream = _sdk.watchSession(sessionId);
+    final sdkStream =
+        _agent.watchSession(sdk.WatchSessionRequest(id: sessionId));
     return sdkStream.map((e) => StreamEvent(
         e.event,
         StructUtils.toJson(e.params)));
