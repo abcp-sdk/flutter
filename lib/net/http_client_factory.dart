@@ -1,0 +1,2 @@
+export 'http_client_stub.dart'
+    if (dart.library.io) 'http_client.dart';

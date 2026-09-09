@@ -1,0 +1,580 @@
+{
+  "@@locale": "zh",
+  "@@context": "ZergX",
+  "appTitle": "ZergX",
+  "gatewayUrl": "网关地址",
+  "tokenLabel": "令牌",
+  "connect": "连接",
+  "connecting": "连接中…",
+  "search": "搜索",
+  "searchHint": "搜索会话 / org / repo / 分支",
+  "createNewOrg": "新建组织",
+  "createNewRepo": "新建仓库…",
+  "createCloneRepo": "克隆仓库…",
+  "chooseOrg": "选择组织",
+  "createOrgFirst": "请先创建组织",
+  "recent": "最近",
+  "allRepos": "所有仓库",
+  "noRepos": "暂无仓库，先创建一个会话吧。",
+  "me": "我",
+  "tabChat": "会话",
+  "tabCode": "代码",
+  "tabContainers": "容器",
+  "tabPackages": "包",
+  "tabConfig": "设置",
+  "contextTokens": "上下文",
+  "loadError": "加载失败：{arg1}",
+  "@loadError": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "markRead": "标记已读",
+  "typeMessage": "输入消息…",
+  "chatTitle": "会话",
+  "thinkLabel": "思考",
+  "compactedLabel": "历史已压缩 · 查看摘要",
+  "copied": "已复制",
+  "copy": "复制",
+  "error": "错误",
+  "undo": "撤销",
+  "undoTitle": "撤销此消息？",
+  "undoBody": "将删除该消息，并撤销之后的所有消息。",
+  "cancel": "取消",
+  "confirm": "确定",
+  "apply": "应用",
+  "delete": "删除",
+  "loading": "加载中…",
+  "loadEarlier": "加载更早的消息",
+  "noChanges": "无变更",
+  "thinking": "思考中…",
+  "running": "运行中…",
+  "sendFailed": "发送失败: {arg1}",
+  "@sendFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "attach": "添加附件",
+  "image": "图片",
+  "takePhoto": "拍照",
+  "chooseImage": "从相册选图",
+  "chooseFile": "选择文件",
+  "waitUpload": "附件仍在上传中，请稍候",
+  "downloaded": "已下载到",
+  "sessionSettings": "会话设置",
+  "compactHistory": "压缩历史",
+  "timeline": "时间线",
+  "files": "文件",
+  "mailbox": "收件箱",
+  "container": "容器",
+  "todos": "待办",
+  "deleteSession": "删除会话",
+  "historyCompacted": "历史已压缩",
+  "nothingToCompact": "历史太短，无需压缩",
+  "back": "返回",
+  "refresh": "刷新",
+  "viewOutput": "查看实时输出",
+  "taskProgress": "任务进度",
+  "taskDone": "已完成",
+  "taskFailed": "已失败",
+  "viewChange": "查看变更",
+  "changeDiff": "变更对比",
+  "you": "我",
+  "settingsTitle": "会话设置",
+  "modelLabel": "模型",
+  "presetLabel": "预设",
+  "maxTurnsLabel": "最大轮数",
+  "sysPromptLabel": "系统提示（留空继承）",
+  "deleteSessionTitle": "删除会话",
+  "deleteSessionBody": "删除会话\"{arg1}\"？",
+  "@deleteSessionBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "newOrg": "新建组织",
+  "orgNameLabel": "组织名称",
+  "newRepoIn": "在 {arg1} 新建仓库",
+  "@newRepoIn": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "repoNameLabel": "仓库名称",
+  "cloneInto": "克隆到 {arg1}",
+  "@cloneInto": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "gitUrlLabel": "Git 地址",
+  "repoName2": "仓库名称",
+  "accessTokenOpt": "访问令牌（可选）",
+  "revOpt": "分支 / 标签 / 提交（可选）",
+  "clone": "克隆",
+  "deleteOrgTitle": "删除组织",
+  "deleteRepoTitle": "删除仓库",
+  "deleteOrgBody": "删除组织 {arg1}？将移除其所有仓库和会话。",
+  "@deleteOrgBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteRepoBody": "删除仓库 {arg1}/{arg2}？将移除其所有会话。",
+  "@deleteRepoBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "fork": "分叉",
+  "forkBranchLabel": "分支名称",
+  "branchExists": "分支已存在",
+  "adoptFailed": "接管失败: {arg1}",
+  "@adoptFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "cloneFailed": "克隆失败: {arg1}",
+  "@cloneFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "failed": "失败: {arg1}",
+  "@failed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "settings": "设置",
+  "appearance": "外观",
+  "darkMode": "深色模式",
+  "darkModeSub": "切换深/浅色外观",
+  "llm": "语言模型",
+  "llmProviders": "供应商",
+  "providers": "供应商",
+  "presets": "预设",
+  "workspace": "工作区",
+  "tools": "工具",
+  "language": "语言",
+  "logout": "退出登录",
+  "logoutBody": "将清除已保存的网关地址与令牌，并返回登录页。",
+  "switchBackend": "切换后端",
+  "backendsTitle": "后端",
+  "noSavedBackends": "暂无已保存的后端。",
+  "addBackend": "添加新后端",
+  "deleteBackend": "移除后端",
+  "backendSection": "后端",
+  "providerTemplate": "模板（models.dev）",
+  "providerTemplateHint": "选择服务商自动填充",
+  "searchModels": "搜索模型…",
+  "modelsSelected": "已选 {arg1} / {arg2}",
+  "@modelsSelected": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "noProviders": "暂无供应商，添加一个开始使用。",
+  "addProvider": "添加供应商",
+  "deleteProvider": "删除供应商",
+  "deleteProviderBody": "删除供应商 {arg1}？",
+  "@deleteProviderBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "modelsCount": "{arg1} 个模型",
+  "@modelsCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "providerId": "供应商 ID",
+  "providerTitle": "供应商：{arg1}（{arg2}）",
+  "@providerTitle": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "providerIdReq": "供应商 ID（必填）",
+  "providerIdLabel": "供应商 ID",
+  "apiType": "API 类型",
+  "apiTypeOpenai": "OpenAI",
+  "apiTypeAnthropic": "Anthropic",
+  "apiTypeGemini": "Gemini",
+  "baseUrl": "基础地址",
+  "apiKey": "API 密钥",
+  "test": "测试",
+  "testing": "测试中…",
+  "register": "注册",
+  "registering": "注册中…",
+  "saved": "已保存",
+  "noConfig": "无配置",
+  "configured": "已配置",
+  "needsConfig": "需配置",
+  "newPreset": "新建预设",
+  "presetId": "预设 ID…",
+  "create": "创建",
+  "noPresets": "暂无预设。",
+  "deletePreset": "删除预设",
+  "deletePresetBody": "删除预设 {arg1}？",
+  "@deletePresetBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "presetSummary": "最大 {arg1} 轮 · {arg2} 个工具",
+  "@presetSummary": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPrompt": "系统提示",
+  "maxTurns": "最大轮数",
+  "containersTitle": "容器",
+  "deployments": "部署",
+  "noDeployments": "暂无部署。",
+  "sandboxes": "沙箱",
+  "noContainers": "没有运行中的容器。",
+  "deployService": "部署服务",
+  "terminal": "终端",
+  "ready": "{arg1}/{arg2} 就绪",
+  "@ready": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteDeploymentTitle": "删除部署",
+  "deleteDeploymentBody": "删除部署 {arg1}？",
+  "@deleteDeploymentBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteSandboxTitle": "删除沙箱",
+  "deleteSandboxBody": "删除沙箱 {arg1}？其中运行的任务将被终止。",
+  "@deleteSandboxBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "terminalTab": "终端",
+  "jobsTab": "任务",
+  "commandHint": "输入命令…",
+  "close": "关闭",
+  "noOutput": "无输出",
+  "noSession": "无会话",
+  "noJobs": "暂无任务",
+  "noWorker": "还没有 worker 容器 — agent 运行 bash 等工具时自动创建。",
+  "createContainerNow": "立即创建容器",
+  "backgrounded": "[{arg1}] 已转入后台（见任务页）",
+  "@backgrounded": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "packagesTitle": "包",
+  "registries": "注册表",
+  "packagesTab": "包",
+  "filterEcosystems": "过滤生态…",
+  "proxyRegistries": "代理注册表（{arg1}）",
+  "@proxyRegistries": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "endpointCopied": "端点已复制",
+  "ociCatalog": "OCI 镜像目录（{arg1}）",
+  "@ociCatalog": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "noImages": "暂无镜像。",
+  "searchPackages": "搜索包…",
+  "typeLabel": "类型",
+  "prev": "上一页",
+  "next": "下一页",
+  "deletePackage": "删除包",
+  "deletePackageBody": "删除包 {arg1}（{arg2}）？",
+  "@deletePackageBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "noVersions": "暂无版本。",
+  "downloads": "{arg1} 次下载",
+  "@downloads": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "noPackagesYet": "暂无已发布的包。",
+  "versionsCount": "{arg1} 个版本",
+  "@versionsCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "cachedPackages": "{arg1} 个包",
+  "@cachedPackages": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "noUpstreamLocal": "无上游（仅本地）",
+  "nameLabel": "名称",
+  "imageLabel": "镜像",
+  "replicasLabel": "副本数",
+  "portLabel": "端口",
+  "sessionOptLabel": "会话（可选）",
+  "repositories": "仓库",
+  "history": "历史",
+  "none": "无",
+  "download": "下载",
+  "selectFile": "选择一个文件查看",
+  "selectBookmark": "选择书签浏览文件",
+  "noCommits": "暂无提交",
+  "noHistory": "该文件暂无历史。",
+  "noChangesYet": "暂无变更",
+  "noMessages": "暂无消息",
+  "noTodosYet": "暂无待办 — agent 通过 todowrite 在此跟踪计划。",
+  "noDescription": "（无描述）",
+  "consumed": "已消费",
+  "pending": "待审批",
+  "browserTitle": "浏览",
+  "bookmarksSection": "书签",
+  "reposCount": "{arg1} 个仓库",
+  "@reposCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "overview": "概要",
+  "releasesTab": "发布",
+  "branchesTab": "分支",
+  "defaultBranch": "默认分支",
+  "recentCommits": "最近提交",
+  "noBranches": "暂无分支",
+  "noReleases": "暂无发布。",
+  "assetsCount": "{arg1} 个附件",
+  "@assetsCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "draftBadge": "草稿",
+  "prereleaseBadge": "预发布",
+  "downloadSource": "下载源码 (tar.gz)",
+  "downloading": "下载中",
+  "savedToDownloads": "已保存到「下载」：{arg1}",
+  "@savedToDownloads": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "savedToAppDir": "已保存：{arg1}",
+  "@savedToAppDir": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "downloadFailed": "下载失败：{arg1}",
+  "@downloadFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "newRepoInOrg": "在此组织新建仓库",
+  "pickRepo": "选择仓库",
+  "pickBranch": "选择分支",
+  "pickOrg": "选择组织",
+  "codeEmptyHint": "先选一个 org / repo / 书签开始浏览代码",
+  "backToList": "返回列表",
+  "timeJustNow": "刚刚",
+  "timeMinAgo": "{arg1} 分钟前",
+  "@timeMinAgo": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "timeHour": "{arg1} 小时前",
+  "@timeHour": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "timeDay": "{arg1} 天前",
+  "@timeDay": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "baseUrlReq": "基础地址（必填）",
+  "apiKeyReq": "API 密钥（必填）",
+  "save": "保存",
+  "noTools": "暂无工具",
+  "packPageOf": "{arg1}–{arg2} / 共{arg3}",
+  "@packPageOf": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      },
+      "arg3": {
+        "type": "String"
+      }
+    }
+  },
+  "@syncFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "syncRepo": "同步",
+  "pullFromRemote": "从远程拉取",
+  "pushToRemote": "推送到远程",
+  "pullConfirm": "拉取",
+  "pushConfirm": "推送",
+  "secretLabel": "访问令牌（可选，用于鉴权）",
+  "pullDone": "已从远程拉取",
+  "pushDone": "已推送到远程",
+  "syncFailed": "同步失败：{e}",
+  "@secretSetPlaceholder": {
+    "placeholders": {}
+  },
+  "mirrorSettings": "镜像设置",
+  "pullUrlLabel": "拉取地址",
+  "pushUrlLabel": "推送地址",
+  "secretSetPlaceholder": "已设置（留空保持不变）",
+  "secretKeepToUpdate": "已保存过凭证，输入新值可更新",
+  "clearMirror": "清除",
+  "savedMirror": "镜像设置已保存",
+  "@agentLocaleApplied": {
+    "placeholders": {
+      "l": {
+        "type": "String"
+      }
+    }
+  },
+  "agentLocale": "Agent 语言",
+  "agentLocaleSub": "控制 agent 拼提示词与工具描述的语言（跟随/中文/English），写入后端并即时生效",
+  "agentLocaleFollow": "跟随（UI 语言）",
+  "agentLocaleApplied": "Agent 语言已切换为 {l}",
+  "toolParams": "参数",
+  "showMore": "展开",
+  "showLess": "收起",
+  "vlmModelLabel": "视觉模型",
+  "configValueHint": "输入值后回车保存",
+  "systemPresetBadge": "系统",
+  "readOnlyPreset": "系统预设：只读，不可编辑",
+  "sysPromptByPreset": "系统提示由所选预设决定，不可直接修改。",
+  "requiredConfig": "必需配置",
+  "selectProviderFirst": "请先选择服务商",
+  "noModelsForProvider": "该服务商已注册暂无模型",
+  "apiTypeOpenaiCompat": "OpenAI 兼容",
+  "modelsLabel": "模型",
+  "modelIdLabel": "模型 ID…",
+  "contextLengthLabel": "上下文",
+  "add": "添加",
+  "enterToAddHint": "回车添加模型标签",
+  "turnsByPreset": "最大轮数由所选预设决定。",
+  "testModelOk": "模型可用：{arg1}",
+  "connected": "已连接",
+  "connectionError": "连接错误：{arg1}",
+  "toolInputParams": "输入参数",
+  "newSession": "新会话",
+  "noSessions": "暂无会话"
+}

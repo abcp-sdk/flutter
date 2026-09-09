@@ -1,0 +1,580 @@
+{
+  "@@locale": "en",
+  "@@context": "ZergX",
+  "appTitle": "ZergX",
+  "gatewayUrl": "Gateway URL",
+  "tokenLabel": "Token",
+  "connect": "Connect",
+  "connecting": "Connecting...",
+  "search": "Search",
+  "searchHint": "Search sessions / org / repo / branch",
+  "createNewOrg": "New organization",
+  "createNewRepo": "New repo…",
+  "createCloneRepo": "Clone repo…",
+  "chooseOrg": "Choose organization",
+  "createOrgFirst": "Create an organization first",
+  "recent": "Recent",
+  "allRepos": "All repositories",
+  "noRepos": "No repositories. Create a session first.",
+  "me": "me",
+  "tabChat": "Chat",
+  "tabCode": "Code",
+  "tabContainers": "Containers",
+  "tabPackages": "Packages",
+  "tabConfig": "Config",
+  "contextTokens": "Context",
+  "loadError": "Load failed: {arg1}",
+  "@loadError": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "markRead": "Mark as read",
+  "typeMessage": "Type a message...",
+  "chatTitle": "Chat",
+  "thinkLabel": "Thinking",
+  "compactedLabel": "History compacted · view summary",
+  "copied": "Copied",
+  "copy": "Copy",
+  "error": "Error",
+  "undo": "Undo",
+  "undoTitle": "Undo this message?",
+  "undoBody": "This deletes the message and everything after it.",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "apply": "Apply",
+  "delete": "Delete",
+  "loading": "Loading...",
+  "loadEarlier": "Load earlier",
+  "noChanges": "No changes",
+  "thinking": "thinking...",
+  "running": "running...",
+  "sendFailed": "Send failed: {arg1}",
+  "@sendFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "attach": "Attach file",
+  "image": "image",
+  "takePhoto": "Take photo",
+  "chooseImage": "Choose from gallery",
+  "chooseFile": "Choose file",
+  "waitUpload": "Attachment is still uploading",
+  "downloaded": "Downloaded to",
+  "sessionSettings": "Session settings",
+  "compactHistory": "Compact history",
+  "timeline": "Timeline",
+  "files": "Files",
+  "mailbox": "Mailbox",
+  "container": "Container",
+  "todos": "Todos",
+  "deleteSession": "Delete session",
+  "historyCompacted": "History compacted",
+  "nothingToCompact": "Nothing to compact — history is short",
+  "back": "Back",
+  "refresh": "Refresh",
+  "viewOutput": "View live output",
+  "taskProgress": "Task progress",
+  "taskDone": "Done",
+  "taskFailed": "Failed",
+  "viewChange": "View change",
+  "changeDiff": "Change diff",
+  "you": "me",
+  "settingsTitle": "Session Settings",
+  "modelLabel": "Model",
+  "presetLabel": "Preset",
+  "maxTurnsLabel": "Max Turns",
+  "sysPromptLabel": "System Prompt (blank = inherit)",
+  "deleteSessionTitle": "Delete session",
+  "deleteSessionBody": "Delete session \"{arg1}\"?",
+  "@deleteSessionBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "newOrg": "New organization",
+  "orgNameLabel": "Organization name",
+  "newRepoIn": "New repo in {arg1}",
+  "@newRepoIn": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "repoNameLabel": "Repo name",
+  "cloneInto": "Clone into {arg1}",
+  "@cloneInto": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "gitUrlLabel": "Git URL",
+  "repoName2": "Repo name",
+  "accessTokenOpt": "Access token (optional)",
+  "revOpt": "Branch / tag / commit (optional)",
+  "clone": "Clone",
+  "deleteOrgTitle": "Delete organization",
+  "deleteRepoTitle": "Delete repo",
+  "deleteOrgBody": "Delete organization {arg1}? This removes all its repos and sessions.",
+  "@deleteOrgBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteRepoBody": "Delete repo {arg1}/{arg2}? This removes all its sessions.",
+  "@deleteRepoBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "fork": "Fork",
+  "forkBranchLabel": "Branch name",
+  "branchExists": "Branch already exists",
+  "adoptFailed": "Adopt failed: {arg1}",
+  "@adoptFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "cloneFailed": "Clone failed: {arg1}",
+  "@cloneFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "failed": "Failed: {arg1}",
+  "@failed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "settings": "Settings",
+  "appearance": "Appearance",
+  "darkMode": "Dark mode",
+  "darkModeSub": "Toggle light/dark appearance",
+  "llm": "LLM",
+  "llmProviders": "Providers",
+  "providers": "Providers",
+  "presets": "Presets",
+  "workspace": "Workspace",
+  "tools": "Tools",
+  "language": "Language",
+  "logout": "Log out",
+  "logoutBody": "This clears the saved gateway URL and token and returns to the login screen.",
+  "switchBackend": "Switch backend",
+  "backendsTitle": "Backends",
+  "noSavedBackends": "No saved backends yet.",
+  "addBackend": "Add new backend",
+  "deleteBackend": "Remove backend",
+  "backendSection": "Backend",
+  "providerTemplate": "Template (models.dev)",
+  "providerTemplateHint": "Pick a provider to prefill",
+  "searchModels": "Search models...",
+  "modelsSelected": "{arg1} of {arg2} selected",
+  "@modelsSelected": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "noProviders": "No providers. Add one to get started.",
+  "addProvider": "Add Provider",
+  "deleteProvider": "Delete Provider",
+  "deleteProviderBody": "Delete Provider {arg1}?",
+  "@deleteProviderBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "modelsCount": "{arg1} models",
+  "@modelsCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "providerId": "Provider ID",
+  "providerTitle": "Provider: {arg1} ({arg2})",
+  "@providerTitle": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "providerIdReq": "Provider ID (required)",
+  "providerIdLabel": "Provider ID",
+  "apiType": "API Type",
+  "apiTypeOpenai": "OpenAI",
+  "apiTypeAnthropic": "Anthropic",
+  "apiTypeGemini": "Gemini",
+  "baseUrl": "Base URL",
+  "apiKey": "API Key",
+  "test": "Test",
+  "testing": "Testing...",
+  "register": "Register",
+  "registering": "Registering...",
+  "saved": "Saved",
+  "noConfig": "no config",
+  "configured": "configured",
+  "needsConfig": "needs config",
+  "newPreset": "New preset",
+  "presetId": "Preset id...",
+  "create": "Create",
+  "noPresets": "No presets.",
+  "deletePreset": "Delete preset",
+  "deletePresetBody": "Delete preset {arg1}?",
+  "@deletePresetBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "presetSummary": "{arg1} turns · {arg2} tools",
+  "@presetSummary": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPrompt": "System Prompt",
+  "maxTurns": "Max turns",
+  "containersTitle": "Containers",
+  "deployments": "Deployments",
+  "noDeployments": "No deployments yet.",
+  "sandboxes": "Sandboxes",
+  "noContainers": "No containers running.",
+  "deployService": "Deploy service",
+  "terminal": "Terminal",
+  "ready": "{arg1}/{arg2} ready",
+  "@ready": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteDeploymentTitle": "Delete deployment",
+  "deleteDeploymentBody": "Delete deployment {arg1}?",
+  "@deleteDeploymentBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteSandboxTitle": "Delete sandbox",
+  "deleteSandboxBody": "Delete sandbox {arg1}? Its running jobs will be killed.",
+  "@deleteSandboxBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "terminalTab": "Terminal",
+  "jobsTab": "Jobs",
+  "commandHint": "command...",
+  "close": "Close",
+  "noOutput": "No output",
+  "noSession": "No session",
+  "noJobs": "No jobs",
+  "noWorker": "No worker container yet — it starts automatically when the agent runs bash.",
+  "createContainerNow": "Create container now",
+  "backgrounded": "[{arg1}] backgrounded (see Jobs)",
+  "@backgrounded": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "packagesTitle": "Packages",
+  "registries": "Registries",
+  "packagesTab": "Packages",
+  "filterEcosystems": "Filter ecosystems...",
+  "proxyRegistries": "Proxy Registries ({arg1})",
+  "@proxyRegistries": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "endpointCopied": "Endpoint copied",
+  "ociCatalog": "OCI Image Catalog ({arg1})",
+  "@ociCatalog": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "noImages": "No images stored.",
+  "searchPackages": "Search packages...",
+  "typeLabel": "Type",
+  "prev": "Prev",
+  "next": "Next",
+  "deletePackage": "Delete package",
+  "deletePackageBody": "Delete package {arg1} ({arg2})?",
+  "@deletePackageBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "noVersions": "No versions found.",
+  "downloads": "{arg1} downloads",
+  "@downloads": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "noPackagesYet": "No packages registered yet.",
+  "versionsCount": "{arg1} versions",
+  "@versionsCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "cachedPackages": "{arg1} packages",
+  "@cachedPackages": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "noUpstreamLocal": "no upstream (local only)",
+  "nameLabel": "Name",
+  "imageLabel": "Image",
+  "replicasLabel": "Replicas",
+  "portLabel": "Port",
+  "sessionOptLabel": "Session (optional)",
+  "repositories": "Repositories",
+  "history": "History",
+  "none": "None",
+  "download": "Download",
+  "selectFile": "Select a file to view",
+  "selectBookmark": "Select a bookmark to browse files",
+  "noCommits": "No commits",
+  "noHistory": "No history for this file.",
+  "noChangesYet": "No changes yet",
+  "noMessages": "No messages",
+  "noTodosYet": "No todos yet — the agent tracks its plan here via todowrite.",
+  "noDescription": "(no description)",
+  "consumed": "consumed",
+  "pending": "Pending",
+  "browserTitle": "Browse",
+  "bookmarksSection": "Bookmarks",
+  "reposCount": "{arg1} repos",
+  "@reposCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "overview": "Overview",
+  "releasesTab": "Releases",
+  "branchesTab": "Branches",
+  "defaultBranch": "Default branch",
+  "recentCommits": "Recent commits",
+  "noBranches": "No branches",
+  "noReleases": "No releases yet.",
+  "assetsCount": "{arg1} assets",
+  "@assetsCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "draftBadge": "draft",
+  "prereleaseBadge": "pre-release",
+  "downloadSource": "Download source (tar.gz)",
+  "downloading": "Downloading",
+  "savedToDownloads": "Saved to Downloads: {arg1}",
+  "@savedToDownloads": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "savedToAppDir": "Saved: {arg1}",
+  "@savedToAppDir": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "downloadFailed": "Download failed: {arg1}",
+  "@downloadFailed": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "newRepoInOrg": "New repo in this org",
+  "pickRepo": "Pick a repository",
+  "pickBranch": "Pick a branch",
+  "pickOrg": "Pick an organization",
+  "codeEmptyHint": "Pick an org / repo / bookmark to browse code",
+  "backToList": "Back to list",
+  "timeJustNow": "just now",
+  "timeMinAgo": "{arg1} min ago",
+  "@timeMinAgo": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "timeHour": "{arg1} h ago",
+  "@timeHour": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "timeDay": "{arg1} d ago",
+  "@timeDay": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "baseUrlReq": "Base URL (required)",
+  "apiKeyReq": "API Key (required)",
+  "save": "Save",
+  "noTools": "No tools",
+  "packPageOf": "{arg1}–{arg2} of {arg3}",
+  "@packPageOf": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      },
+      "arg3": {
+        "type": "String"
+      }
+    }
+  },
+  "@syncFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "syncRepo": "Sync",
+  "pullFromRemote": "Pull from remote",
+  "pushToRemote": "Push to remote",
+  "pullConfirm": "Pull",
+  "pushConfirm": "Push",
+  "secretLabel": "Access token (optional)",
+  "pullDone": "Pulled from remote",
+  "pushDone": "Pushed to remote",
+  "syncFailed": "Sync failed: {e}",
+  "@secretSetPlaceholder": {
+    "placeholders": {}
+  },
+  "mirrorSettings": "Mirror settings",
+  "pullUrlLabel": "Pull URL",
+  "pushUrlLabel": "Push URL",
+  "secretSetPlaceholder": "Secret set (leave blank to keep)",
+  "secretKeepToUpdate": "A secret is stored; enter a new value to update it",
+  "clearMirror": "Clear",
+  "savedMirror": "Mirror settings saved",
+  "@agentLocaleApplied": {
+    "placeholders": {
+      "l": {
+        "type": "String"
+      }
+    }
+  },
+  "agentLocale": "Agent language",
+  "agentLocaleSub": "Agent prompt/tool language: follow UI, zh or en; written to backend immediately",
+  "agentLocaleFollow": "Follow (UI language)",
+  "agentLocaleApplied": "Agent language set to {l}",
+  "toolParams": "Parameters",
+  "showMore": "Show",
+  "showLess": "Collapse",
+  "vlmModelLabel": "Vision model",
+  "configValueHint": "Enter to save",
+  "systemPresetBadge": "System",
+  "readOnlyPreset": "System preset: read-only",
+  "sysPromptByPreset": "System prompt is determined by the selected preset.",
+  "requiredConfig": "required config",
+  "selectProviderFirst": "Select a provider first",
+  "noModelsForProvider": "No models registered for this provider",
+  "apiTypeOpenaiCompat": "OpenAI Compatible",
+  "modelsLabel": "Models",
+  "modelIdLabel": "model id…",
+  "contextLengthLabel": "context",
+  "add": "Add",
+  "enterToAddHint": "Enter to add a model tag",
+  "turnsByPreset": "Max turns is set by the selected preset.",
+  "testModelOk": "Model OK: {arg1}",
+  "connected": "Connected",
+  "connectionError": "Connection error: {arg1}",
+  "toolInputParams": "Input",
+  "newSession": "New session",
+  "noSessions": "No sessions"
+}

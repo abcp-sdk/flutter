@@ -25,9 +25,15 @@ android {
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
+         versionCode = flutter.versionCode
+         versionName = flutter.versionName
+         // Only 64-bit ARM. The jni native build (pulled by path_provider_android)
+         // only ships the aarch64 clang toolchain in this NDK; building the 32-bit
+         // armeabi target fails. Restricting to arm64 lets the build pass.
+         ndk {
+             abiFilters += listOf("arm64-v8a")
+         }
+     }
 
     buildTypes {
         release {
