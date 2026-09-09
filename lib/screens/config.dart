@@ -869,7 +869,8 @@ class _PresetsDetailState extends State<_PresetsDetail> {
       _presets = await widget.api.presets();
     } catch (_) {}
     try {
-      _tools = await widget.api.tools();
+      _tools = await widget.api.tools(
+          locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh));
     } catch (_) {}
     setState(() => _loading = false);
   }

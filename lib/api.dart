@@ -288,7 +288,8 @@ class AgentBindApi {
       _agent.deletePreset(sdk.DeletePresetRequest(id: id));
 
   Future<List<ToolInfo>> tools({String? locale}) async {
-    final r = await _agent.listTools(sdk.ListToolsRequest());
+    final r = await _agent.listTools(
+        sdk.ListToolsRequest(locale: locale ?? ''));
     return r.tools.map((t) => ToolInfo(
           name: t.name,
           description: t.description,
