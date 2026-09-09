@@ -156,6 +156,13 @@ class AppStore extends ChangeNotifier {
     final list = currentStack;
     if (list.length > 1) {
       list.removeLast();
+      // Backing out of a conversation returns to the session list, so a
+      // session is no longer open. This re-shows the bottom nav bar (which is
+      // hidden while activeSessionId != null).
+      if (siderTab == SiderTab.chat && list.length == 1) {
+        activeSessionId = null;
+        sessionOverlay = null;
+      }
       notifyListeners();
     }
   }
