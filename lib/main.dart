@@ -312,7 +312,11 @@ class _Shell extends StatelessWidget {
     );
   }
 
-  /// Tablet: the last two pages of the stack, side by side, 50/50.
+  /// Tablet: the last two pages of the stack, side by side. Always rendered
+  /// inside the same Row/Expanded structure — even for a single page — so the
+  /// element tree position of the left panel stays identical when a drill-in is
+  /// pushed. Otherwise Flutter disposes + recreates the panel (re-running its
+  /// initState → a visible reload/flicker on the settings list, unlike chat).
   Widget _tabletBody(SiderTab tab) {
     final stack = store.currentStack;
     final pages = buildStackPages(store, stack,
@@ -320,7 +324,6 @@ class _Shell extends StatelessWidget {
         darkMode: darkMode,
         onDarkMode: onDarkMode,
         onSwitchBackend: onSwitchBackend);
-    if (pages.length == 1) return pages.first;
     return Row(
       children: [
         for (final p in pages) Expanded(child: p),

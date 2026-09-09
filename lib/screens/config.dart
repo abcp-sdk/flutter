@@ -58,8 +58,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  /// Push a drill-in sub page onto the config tab's stack.
-  void _push(String id) => store.pushPage(ConfigSubPage(id));
+  /// Push a drill-in sub page onto the config tab's stack. Config drill-ins are
+  /// SIBLING views (providers/presets/tools/appearance) — tapping one replaces
+  /// the current one so the tablet split always shows the list alongside the
+  /// tapped page (1 | 2 → 1 | 3), never a stack of two parallels.
+  void _push(String id) => store.pushSibling(ConfigSubPage(id));
 
   @override
   Widget build(BuildContext context) {

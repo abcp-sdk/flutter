@@ -151,6 +151,19 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Push a SIBLING page: a new drill-in at the same level replaces the current
+  /// one rather than stacking. Keeps the stack at [root, current]; the tablet
+  /// split never shows two parallel pages side-by-side (only a child-of-top
+  /// pairing is valid). E.g. config: 1 (list) | 2 (providers) → tapping
+  /// "presets" should be 1 | 3, NOT 1 | 2 | 3.
+  void pushSibling(AppPage page) {
+    final list = currentStack;
+    if (list.length > 1) {
+      list.removeRange(1, list.length); // drop the previous drill-in
+    }
+    pushPage(page); // this re-appends (and dedups same-key)
+  }
+
   /// Pop the top page of the current tab's stack. Never pops below the root.
   void popPage() {
     final list = currentStack;
