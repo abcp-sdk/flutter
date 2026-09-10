@@ -592,9 +592,9 @@ class _AddProviderFormState extends State<_AddProviderForm> {
     });
     final messenger = ScaffoldMessenger.of(context);
     try {
-      // If exactly one model is chosen, test that model with a real 1-turn
-      // generation (proves it is usable); otherwise probe the provider.
-      final model = models.length == 1 ? models.first.id : null;
+      // A real 1-turn generation is the ONLY test: always test a concrete
+      // model (the first selected), never a provider-level probe.
+      final model = models.first.id;
       final r = await widget.api.testProvider(
           apiType: _apiType,
           baseUrl: _url.text,
@@ -604,10 +604,8 @@ class _AddProviderFormState extends State<_AddProviderForm> {
       setState(() {
         _testing = false;
         _testMsg = r['ok'] == true
-            ? (model != null
-                ? context.l10n.testModelOk('${r['text'] ?? ''}')
-                : (r['detail'] ?? 'OK'))
-            : (r['error'] ?? 'Failed');
+            ? context.l10n.testModelOk('${r['result'] ?? ''}')
+            : '${r['result'] ?? 'Failed'}';
       });
     } catch (e) {
       if (!mounted) return;
@@ -655,7 +653,11 @@ class _AddProviderFormState extends State<_AddProviderForm> {
     if (picked == null) return;
     setState(() {
       _template = picked;
-      _selectedModels.clear();
+      // Auto-select every model the template ships so registering the provider
+      // immediately includes its model catalogue (no manual chip picking).
+      _selectedModels
+        ..clear()
+        ..addAll(picked.models.map((m) => m.id));
       _modelQuery = '';
       _id.text = picked.id;
       if (picked.api.isNotEmpty) _url.text = picked.api;

@@ -108,6 +108,7 @@ class MdProvider {
     final models = <MdModel>[];
     final mj = j['models'];
     if (mj is Map<String, dynamic>) {
+      // models.dev wire format: { modelId: { ... } }.
       mj.forEach((mid, mv) {
         if (mv is Map<String, dynamic>) {
           models.add(MdModel.fromJson(mid, mv));
@@ -128,7 +129,9 @@ class MdProvider {
         'name': name,
         'npm': npm,
         'api': api,
-        'models': models.map((m) => m.toJson()).toList(),
+        // Keep the exact models.dev shape (a Map keyed by model id) so the
+        // cached payload round-trips through the same parser.
+        'models': {for (final m in models) m.id: m.toJson()},
       };
 }
 
@@ -142,11 +145,15 @@ class MdModel {
         id: j['id'] as String? ?? key,
         name: j['name'] as String? ?? key,
         contextLimit: (j['limit'] is Map<String, dynamic>)
-            ? ((j['limit'] as Map<String, dynamic>)['context'] as num?)
-                ?.toInt()
+            ? ((j['limit'] as Map<String, dynamic>)['context'] as num?)?.toInt()
             : null,
       );
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'name': name, 'context_limit': contextLimit};
+  /// The models.dev per-model shape, so the cache round-trips through
+  /// [MdModel.fromJson] unchanged.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (contextLimit != null) 'limit': {'context': contextLimit},
+      };
 }
