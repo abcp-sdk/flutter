@@ -282,7 +282,25 @@ class AgentBindApi {
 
   Future<List<ModelInfo>> models() async {
     final r = await _agent.listModels(sdk.ListModelsRequest());
-    return r.models.map((m) => ModelInfo(id: m.id, name: m.name)).toList();
+    // Stamp each model with its owning provider so the UI can show/label
+    // "model —— provider". The registry (providers) is the source of truth for
+    // ownership; listModels returns a flat model-id list.
+    final owner = <String, String>{};
+    try {
+      final provs = await providers();
+      for (final e in provs.entries) {
+        for (final m in e.value.models) {
+          owner.putIfAbsent(m.id, () => e.key);
+        }
+      }
+    } catch (_) {}
+    return r.models
+        .map((m) => ModelInfo(
+              id: m.id,
+              name: m.name,
+              providerId: owner[m.id] ?? '',
+            ))
+        .toList();
   }
 
   Future<List<Preset>> presets({String? locale}) async {
