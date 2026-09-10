@@ -608,6 +608,30 @@ abstract class AppLocalizations {
   /// **'已选 {arg1} 项'**
   String selectedCount(String arg1);
 
+  /// No description provided for @capText.
+  ///
+  /// In zh, this message translates to:
+  /// **'文本'**
+  String get capText;
+
+  /// No description provided for @capImage.
+  ///
+  /// In zh, this message translates to:
+  /// **'图像'**
+  String get capImage;
+
+  /// No description provided for @capVideo.
+  ///
+  /// In zh, this message translates to:
+  /// **'视频'**
+  String get capVideo;
+
+  /// No description provided for @capSpeech.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音'**
+  String get capSpeech;
+
   /// No description provided for @newOrg.
   ///
   /// In zh, this message translates to:

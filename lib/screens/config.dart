@@ -413,7 +413,14 @@ class _ModelEntry {
   final String id;
   final String name;
   final int? context;
-  _ModelEntry({required this.id, required this.name, this.context});
+  /// What the model generates: text (default) | image | video | speech.
+  final String capability;
+  _ModelEntry({
+    required this.id,
+    required this.name,
+    this.context,
+    this.capability = 'text',
+  });
 }
 
 class _AddProviderForm extends StatefulWidget {
@@ -445,6 +452,9 @@ class _AddProviderFormState extends State<_AddProviderForm> {
   MdProvider? _template;
   final Set<String> _selectedModels = {};
   String _modelQuery = '';
+  /// Capability filter for the template model list: text (default) |
+  /// image | video | speech. "all" shows every model in the catalogue.
+  String _capabilityFilter = 'text';
 
   // Manual model tags (the "tag + label" entry, no comma-separated CSV).
   final List<_ModelEntry> _modelEntries = [];
@@ -481,22 +491,29 @@ class _AddProviderFormState extends State<_AddProviderForm> {
   void _addModelTag() {
     final mid = _modelIdCtrl.text.trim();
     if (mid.isEmpty) return;
-    // Context length is REQUIRED (drives compaction budgets); refuse an empty
-    // or non-positive value rather than silently dropping it.
+    // Text models need a context length (drives compaction budgets);
+    // generation models (image/video/speech) have none and default to 0.
+    final isText = _capabilityFilter == 'text' || _capabilityFilter == 'all';
     final ctx = int.tryParse(_modelCtxCtrl.text.trim());
-    if (ctx == null || ctx <= 0) {
+    if (isText && (ctx == null || ctx <= 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.l10n.contextLengthRequired)));
       return;
     }
-    _modelEntries.add(_ModelEntry(id: mid, name: mid, context: ctx));
+    _modelEntries.add(_ModelEntry(
+        id: mid,
+        name: mid,
+        context: ctx,
+        capability: isText ? 'text' : _capabilityFilter));
     _modelIdCtrl.clear();
     _modelCtxCtrl.clear();
     setState(() {});
   }
 
-  /// Selected models → [ProviderModel]. Context length is REQUIRED: from the
-  /// models.dev template when it provides one, otherwise the user's entry.
+  /// Selected models → [ProviderModel]. Context length comes from the
+  /// models.dev template (text models), else the user's entry. Capability is
+  /// the model's own output modality (template) or the selected filter
+  /// (manual entry).
   List<ProviderModel> _buildModels() {
     if (_template != null) {
       final byId = {for (final m in _template!.models) m.id: m};
@@ -507,17 +524,23 @@ class _AddProviderFormState extends State<_AddProviderForm> {
               id: id,
               name: m?.name.isNotEmpty == true ? m!.name : id,
               contextLimit: m?.contextLimit,
+              capability: m?.capability ?? 'text',
             );
           })
           .toList();
     }
     return _modelEntries
-        .map((e) =>
-            ProviderModel(id: e.id, name: e.name, contextLimit: e.context))
+        .map((e) => ProviderModel(
+              id: e.id,
+              name: e.name,
+              contextLimit: e.context,
+              capability: e.capability,
+            ))
         .toList();
   }
 
-  /// Manual model entry: tag-style chips (one per model id) + a context
+  /// Manual model entry: capability filter + tag-style chips (one per model
+  /// id) + an optional context length (required for text models only).
   Widget _manualModelEditor(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
@@ -535,7 +558,9 @@ class _AddProviderFormState extends State<_AddProviderForm> {
               for (final e in _modelEntries)
                 Chip(
                   label: Text(
-                    e.context != null ? '${e.id} · ${e.context}' : e.id,
+                    e.capability == 'text'
+                        ? (e.context != null ? '${e.id} · ${e.context}' : e.id)
+                        : '${e.id} · ${e.capability}',
                     style: text.micro.copyWith(fontSize: 10),
                   ),
                   onDeleted: () => setState(() {
@@ -546,6 +571,25 @@ class _AddProviderFormState extends State<_AddProviderForm> {
                 ),
             ],
           ),
+        const SizedBox(height: AppSpacing.xs),
+        // Output modality: decides whether a context length is required
+        // (text) and which capability the registered model carries.
+        SegmentedButton<String>(
+          segments: [
+            ButtonSegment(value: 'text', label: Text(context.l10n.capText)),
+            ButtonSegment(value: 'image', label: Text(context.l10n.capImage)),
+            ButtonSegment(value: 'video', label: Text(context.l10n.capVideo)),
+            ButtonSegment(value: 'speech', label: Text(context.l10n.capSpeech)),
+          ],
+          selected: {_capabilityFilter},
+          onSelectionChanged: (s) =>
+              setState(() => _capabilityFilter = s.first),
+          showSelectedIcon: false,
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
         const SizedBox(height: AppSpacing.xs),
         Row(
           children: [
@@ -560,17 +604,18 @@ class _AddProviderFormState extends State<_AddProviderForm> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              flex: 2,
-              child: TextField(
-                controller: _modelCtxCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: context.l10n.contextLengthLabel,
-                  isDense: true,
+            if (_capabilityFilter == 'text' || _capabilityFilter == 'all')
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _modelCtxCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: context.l10n.contextLengthLabel,
+                    isDense: true,
+                  ),
                 ),
               ),
-            ),
             const SizedBox(width: AppSpacing.xs),
             IconButton.filledTonal(
               tooltip: context.l10n.add,
@@ -623,9 +668,12 @@ class _AddProviderFormState extends State<_AddProviderForm> {
 
   Future<void> _register() async {
     final modelList = _buildModels();
-    // context_limit is mandatory: block submission when any model lacks a
-    // positive value (manual entries or a template model with no limit).
-    if (modelList.isEmpty || modelList.any((m) => (m.contextLimit ?? 0) <= 0)) {
+    // context_limit is mandatory for TEXT models only: block submission when a
+    // text model lacks a positive value. Generation models (image/video/
+    // speech) have no context window and are fine at 0.
+    if (modelList.isEmpty ||
+        modelList.any((m) =>
+            m.capability == 'text' && (m.contextLimit ?? 0) <= 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.l10n.contextLengthRequired)));
       return;
@@ -680,13 +728,14 @@ class _AddProviderFormState extends State<_AddProviderForm> {
     final colors = colorsOf(context);
     final text = textOf(context);
     final templateModels = _template?.models ?? <MdModel>[];
-    final filteredModels = _modelQuery.isEmpty
-        ? templateModels
-        : templateModels
-            .where((m) =>
-                m.id.toLowerCase().contains(_modelQuery.toLowerCase()) ||
-                m.name.toLowerCase().contains(_modelQuery.toLowerCase()))
-            .toList();
+    final filteredModels = templateModels
+        .where((m) =>
+            _capabilityFilter == 'all' || m.capability == _capabilityFilter)
+        .where((m) =>
+            _modelQuery.isEmpty ||
+            m.id.toLowerCase().contains(_modelQuery.toLowerCase()) ||
+            m.name.toLowerCase().contains(_modelQuery.toLowerCase()))
+        .toList();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -771,6 +820,29 @@ class _AddProviderFormState extends State<_AddProviderForm> {
             if (_template == null)
               _manualModelEditor(context)
             else ...[
+              // Output modality filter: chat (default) | image | video |
+              // speech | all. Defaults to chat so a plain provider pick never
+              // accidentally drags in the provider's image/video catalogue.
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'text', label: Text('text')),
+                  ButtonSegment(value: 'image', label: Text('image')),
+                  ButtonSegment(value: 'video', label: Text('video')),
+                  ButtonSegment(value: 'speech', label: Text('speech')),
+                  ButtonSegment(value: 'all', label: Text('all')),
+                ],
+                selected: {_capabilityFilter},
+                onSelectionChanged: (s) => setState(() {
+                  _capabilityFilter = s.first;
+                  _selectedModels.clear();
+                }),
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
               TextField(
                 decoration: InputDecoration(
                   hintText: context.l10n.searchModels,
@@ -782,7 +854,7 @@ class _AddProviderFormState extends State<_AddProviderForm> {
               const SizedBox(height: AppSpacing.xs),
               Text(
                   context.l10n.modelsSelected('${_selectedModels.length}',
-                    '${templateModels.length}'),
+                    '${filteredModels.length}'),
                   style: text.micro
                       .copyWith(color: colors.mutedForeground)),
               ConstrainedBox(

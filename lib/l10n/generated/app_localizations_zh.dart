@@ -275,6 +275,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get capText => '文本';
+
+  @override
+  String get capImage => '图像';
+
+  @override
+  String get capVideo => '视频';
+
+  @override
+  String get capSpeech => '语音';
+
+  @override
   String get newOrg => '新建组织';
 
   @override

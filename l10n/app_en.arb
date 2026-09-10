@@ -121,6 +121,10 @@
       }
     }
   },
+  "capText": "text",
+  "capImage": "image",
+  "capVideo": "video",
+  "capSpeech": "speech",
   "newOrg": "New organization",
   "orgNameLabel": "Organization name",
   "newRepoIn": "New repo in {arg1}",

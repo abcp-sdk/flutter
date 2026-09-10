@@ -121,6 +121,10 @@
       }
     }
   },
+  "capText": "文本",
+  "capImage": "图像",
+  "capVideo": "视频",
+  "capSpeech": "语音",
   "newOrg": "新建组织",
   "orgNameLabel": "组织名称",
   "newRepoIn": "在 {arg1} 新建仓库",

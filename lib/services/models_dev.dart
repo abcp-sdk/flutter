@@ -139,7 +139,26 @@ class MdModel {
   final String id;
   final String name;
   final int? contextLimit;
-  MdModel({required this.id, required this.name, this.contextLimit});
+  /// What the model outputs (models.dev `modalities.output`): e.g.
+  /// ["text"], ["image"], ["text","image"], ["video"], ["audio"]. Empty when
+  /// the catalog does not say.
+  final List<String> output;
+  MdModel({
+    required this.id,
+    required this.name,
+    this.contextLimit,
+    this.output = const [],
+  });
+
+  /// The generation capability this model offers, derived from its output
+  /// modalities. `text` = chat (may also emit images, e.g. omni models);
+  /// `image` = image generation; `video` / `speech` likewise.
+  String get capability {
+    if (output.contains('video')) return 'video';
+    if (output.contains('image') && !output.contains('text')) return 'image';
+    if (output.contains('audio') && !output.contains('text')) return 'speech';
+    return 'text';
+  }
 
   factory MdModel.fromJson(String key, Map<String, dynamic> j) => MdModel(
         id: j['id'] as String? ?? key,
@@ -147,6 +166,11 @@ class MdModel {
         contextLimit: (j['limit'] is Map<String, dynamic>)
             ? ((j['limit'] as Map<String, dynamic>)['context'] as num?)?.toInt()
             : null,
+        output: (j['modalities'] is Map<String, dynamic>)
+            ? ((j['modalities'] as Map<String, dynamic>)['output'] as List? ?? [])
+                .map((e) => '$e')
+                .toList()
+            : const [],
       );
 
   /// The models.dev per-model shape, so the cache round-trips through
@@ -155,5 +179,6 @@ class MdModel {
         'id': id,
         'name': name,
         if (contextLimit != null) 'limit': {'context': contextLimit},
+        if (output.isNotEmpty) 'modalities': {'output': output},
       };
 }

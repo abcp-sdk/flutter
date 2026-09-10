@@ -275,6 +275,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get capText => 'text';
+
+  @override
+  String get capImage => 'image';
+
+  @override
+  String get capVideo => 'video';
+
+  @override
+  String get capSpeech => 'speech';
+
+  @override
   String get newOrg => 'New organization';
 
   @override
