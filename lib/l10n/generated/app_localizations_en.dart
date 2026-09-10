@@ -275,6 +275,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get addModel => 'Add model';
+
+  @override
+  String get noTest => 'No test';
+
+  @override
   String get capText => 'text';
 
   @override

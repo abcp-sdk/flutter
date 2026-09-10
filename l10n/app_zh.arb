@@ -121,6 +121,8 @@
       }
     }
   },
+  "addModel": "添加模型",
+  "noTest": "不可测试",
   "capText": "文本",
   "capImage": "图像",
   "capVideo": "视频",

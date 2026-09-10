@@ -332,16 +332,18 @@ class AgentBindApi {
       _agent.deleteProvider(sdk.DeleteProviderRequest(providerId: pid));
 
   Future<Map<String, dynamic>> testProvider(
-          {required String apiType,
-          required String baseUrl,
-          required String apiKey,
-          String? model}) async {
+      {required String apiType,
+      required String baseUrl,
+      required String apiKey,
+      String? model,
+      String capability = 'text'}) async {
     final r = await _agent.testProvider(sdk.TestProviderRequest(
       providerId: '',
       apiType: apiType,
       baseUrl: baseUrl,
       apiKey: apiKey,
       model: model ?? '',
+      capability: capability,
     ));
     return {'ok': r.ok, 'result': r.result};
   }

@@ -121,6 +121,8 @@
       }
     }
   },
+  "addModel": "Add model",
+  "noTest": "No test",
   "capText": "text",
   "capImage": "image",
   "capVideo": "video",

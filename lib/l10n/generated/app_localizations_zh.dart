@@ -275,6 +275,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get addModel => '添加模型';
+
+  @override
+  String get noTest => '不可测试';
+
+  @override
   String get capText => '文本';
 
   @override

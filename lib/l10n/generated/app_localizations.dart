@@ -608,6 +608,18 @@ abstract class AppLocalizations {
   /// **'已选 {arg1} 项'**
   String selectedCount(String arg1);
 
+  /// No description provided for @addModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加模型'**
+  String get addModel;
+
+  /// No description provided for @noTest.
+  ///
+  /// In zh, this message translates to:
+  /// **'不可测试'**
+  String get noTest;
+
   /// No description provided for @capText.
   ///
   /// In zh, this message translates to:
