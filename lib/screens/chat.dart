@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:image_picker/image_picker.dart';
 
 import '../i18n.dart';
@@ -36,6 +37,11 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   Map<String, ProviderInfo> _providers = {};
   List<Preset> _presets = [];
   bool _initialScrollDone = false;
+  // Whether new content should auto-scroll to the bottom. Only the user's OWN
+  // scroll updates this (content growth must not): scrolling up pauses the
+  // follow so streaming never fights the user reading history; returning to
+  // the bottom re-arms it.
+  bool _followBottom = true;
   // The session id the current _msg controller is bound to (set in _setup).
   String? _boundSid;
 
@@ -52,6 +58,14 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   void _onScroll() {
     final m = _msg;
     if (m == null || !_scroll.hasClients) return;
+    // Only a USER scroll changes follow intent. Content growth (streaming)
+    // also mutates maxScrollExtent/pixels, so we must ignore those — otherwise
+    // the follow would switch off as soon as a delta arrives. Return to the
+    // bottom (within 8px) re-arms following.
+    if (_scroll.position.userScrollDirection != ScrollDirection.idle) {
+      _followBottom =
+          _scroll.position.maxScrollExtent - _scroll.position.pixels <= 8;
+    }
     // Near the top and there is more history → auto-load older messages.
     if (_scroll.position.pixels < 80 && m.hasMore && !m.loading) {
       m.loadMore();
@@ -114,6 +128,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     m.init();
     // New conversation: reset scroll so it sticks to the latest message.
     _initialScrollDone = false;
+    _followBottom = true;
     setState(() => _msg = m);
   }
 
@@ -132,11 +147,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       if (!_initialScrollDone) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
         _initialScrollDone = true;
-      } else if (m.sending) {
-        final nearBottom = _scroll.position.maxScrollExtent -
-                _scroll.position.pixels <
-            120;
-        if (nearBottom) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      } else if (m.sending && _followBottom) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
   }
@@ -169,6 +181,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         _pendingAttachments.where((a) => !a.hasError).toList();
     _pendingAttachments = [];
     _input.clear();
+    // A freshly sent message should always land at the bottom.
+    _followBottom = true;
     setState(() {});
     await _msg?.send(text, attachments);
     _inputFocus.requestFocus();

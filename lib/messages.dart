@@ -99,16 +99,21 @@ class MessagesController extends ChangeNotifier {
         final existing = messages.map((m) => m.id).toSet();
         messages = [...chat.where((m) => !existing.contains(m.id)), ...messages];
       } else {
-        final pending =
-            messages.where((m) => m.status == 'pending').toList();
-        messages = [...pending, ...chat];
+        // Preserve locally-owned in-flight bubbles: the optimistic user
+        // message (pending) AND any streaming assistant bubble built from the
+        // live/replayed stream. Dropping the streaming one would erase the
+        // replayed thinking/text accumulated before this fetch returned.
+        final local = messages
+            .where((m) => m.status == 'pending' || m.status == 'streaming')
+            .toList();
+        messages = [...local, ...chat];
       }
       hasMore = more;
     } catch (_) {}
     loading = false;
-    // Safety net: if the stream missed the terminal event (drop / reconnect),
-    // converge sending -> idle so the UI never stays "running".
-    _syncIdle();
+    // NOTE: no _syncIdle() here — a plain history fetch must not terminate an
+    // active turn. Convergence to idle is driven by the stream's own
+    // terminal events (and _onStreamClosed on drop / error).
     notifyListeners();
   }
 
@@ -117,17 +122,23 @@ class MessagesController extends ChangeNotifier {
       final (status, _) = await api.state(getSessionId());
       if (status == 'busy' || status == 'running') {
         sending = true;
-        _streamingId = 'recover-${DateTime.now().microsecondsSinceEpoch}';
-        messages = [
-          ...messages,
-          ChatMessage(
-              id: _streamingId!,
-              role: 'assistant',
-              status: 'streaming',
-              parts: [],
-              createdAt: DateTime.now().toIso8601String(),
-              seq: _allocSeq()),
-        ];
+        // Don't add a second streaming bubble if the live/replayed stream
+        // already created one (that would orphan it and keep a spinner
+        // alongside real content).
+        final hasStreaming = messages.any((m) => m.status == 'streaming');
+        if (!hasStreaming) {
+          _streamingId = 'recover-${DateTime.now().microsecondsSinceEpoch}';
+          messages = [
+            ...messages,
+            ChatMessage(
+                id: _streamingId!,
+                role: 'assistant',
+                status: 'streaming',
+                parts: [],
+                createdAt: DateTime.now().toIso8601String(),
+                seq: _allocSeq()),
+          ];
+        }
         notifyListeners();
       }
     } catch (_) {}
@@ -176,12 +187,18 @@ class MessagesController extends ChangeNotifier {
     _idleProbeTimer = Timer.periodic(_idleProbeEvery, (_) {
       if (DateTime.now().difference(_lastActivity) < _idleProbeEvery) return;
       // No events for a while: poke the session state so a half-open server
-      // connection is detected / the server re-emits a status.
+      // connection is detected / the server re-emits a status. This doubles as
+      // the idle safety net now that history fetches no longer force idle: if
+      // the server says the session is idle, converge the stream.
       api.state(getSessionId()).then((r) {
         final (st, _) = r;
         if (st == 'busy' || st == 'running') {
-          sending = true;
-          notifyListeners();
+          if (!sending) {
+            sending = true;
+            notifyListeners();
+          }
+        } else {
+          _syncIdle();
         }
       }).catchError((_) {});
     });
@@ -296,8 +313,17 @@ class MessagesController extends ChangeNotifier {
   }
 
   String _ensureStreamingMsg(bool forceNew) {
-    if (!forceNew && _streamingId != null) {
-      if (messages.any((m) => m.id == _streamingId)) return _streamingId!;
+    // Reuse the current streaming bubble unless we are explicitly crossing a
+    // step boundary AND it already holds content. This prevents orphaning an
+    // empty bubble (e.g. the optimistic one from send() / recover()) when the
+    // first step-start arrives — an orphaned empty bubble would keep the
+    // "thinking…" spinner alive forever.
+    if (_streamingId != null) {
+      final idx = messages.indexWhere((m) => m.id == _streamingId);
+      if (idx >= 0) {
+        final existing = messages[idx];
+        if (!forceNew || existing.parts.isEmpty) return _streamingId!;
+      }
     }
     final id = 'm${DateTime.now().microsecondsSinceEpoch}';
     _streamingId = id;
@@ -403,14 +429,12 @@ class MessagesController extends ChangeNotifier {
   }
 
   void _finishStreaming() {
-    if (_streamingId != null) {
-      final idx = messages.indexWhere((m) => m.id == _streamingId);
-      if (idx >= 0) {
-        final next = [...messages];
-        next[idx] = messages[idx].copyWith(status: 'complete');
-        messages = next;
-      }
-    }
+    // Complete EVERY streaming bubble, not just the current _streamingId:
+    // defensive against any orphaned bubble left by a step boundary.
+    final next = messages
+        .map((m) => m.status == 'streaming' ? m.copyWith(status: 'complete') : m)
+        .toList();
+    messages = next;
     _streamingId = null;
     sending = false;
     notifyListeners();
