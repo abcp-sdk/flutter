@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:agent_client_sdk/agent_client_sdk.dart' as sdk;
 import 'package:connectrpc/protobuf.dart';
 import 'package:connectrpc/protocol/connect.dart' as protocol;
+import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart' as wkt;
 
 import 'models.dart';
@@ -166,15 +167,19 @@ class AgentBindApi {
   }
 
   Future<Session> settings(String id, Map<String, dynamic> settings) async {
-    final r = await _agent.updateSettings(sdk.UpdateSettingsRequest(
+    // max_turns is optional: only set it when explicitly provided (>0),
+    // otherwise the update omits it (inherit from preset/default).
+    final maxTurns = settings['max_turns'] as int?;
+    final req = sdk.UpdateSettingsRequest(
       id: id,
       model: (settings['model'] as String?) ?? '',
       preset: (settings['preset'] as String?) ?? '',
-      maxTurns: (settings['max_turns'] as int?) ?? 0,
       systemPrompt: (settings['system_prompt'] as String?) ?? '',
       locale: (settings['locale'] as String?) ?? '',
       variant: (settings['variant'] as String?) ?? '',
-    ));
+    );
+    if (maxTurns != null && maxTurns > 0) req.maxTurns = maxTurns;
+    final r = await _agent.updateSettings(req);
     return _sessionFromSessionResults(r.session);
   }
 
@@ -251,7 +256,13 @@ class AgentBindApi {
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
         headers: p.headers.map((k, v) => MapEntry(k, v)),
-        models: p.models.map((id) => ProviderModel(id: id, name: id)).toList(),
+        models: p.models
+            .map((m) => ProviderModel(
+                  id: m.id,
+                  name: m.name.isNotEmpty ? m.name : m.id,
+                  contextLimit: m.contextLimit.toInt(),
+                ))
+            .toList(),
       );
     }
     return out;
@@ -265,7 +276,13 @@ class AgentBindApi {
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
         headers: p.headers?.entries,
-        models: p.models.map((m) => m.id),
+        models: p.models
+            .map((m) => sdk.ProviderModel(
+                  id: m.id,
+                  name: m.name,
+                  contextLimit: fixnum.Int64(m.contextLimit ?? 0),
+                ))
+            .toList(),
       ),
     ));
   }
@@ -299,6 +316,7 @@ class AgentBindApi {
               id: m.id,
               name: m.name,
               providerId: providerId,
+              contextLimit: m.contextLimit.toInt(),
               variants: m.variants
                   .map((v) => ModelVariantInfo(
                       id: v.id, name: v.name, description: v.description))

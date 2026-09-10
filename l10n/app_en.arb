@@ -570,6 +570,7 @@
   "modelsLabel": "Models",
   "modelIdLabel": "model id…",
   "contextLengthLabel": "context",
+  "contextLengthRequired": "Context length is required (positive number).",
   "add": "Add",
   "enterToAddHint": "Enter to add a model tag",
   "turnsByPreset": "Max turns is set by the selected preset.",

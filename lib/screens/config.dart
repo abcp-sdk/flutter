@@ -481,18 +481,22 @@ class _AddProviderFormState extends State<_AddProviderForm> {
   void _addModelTag() {
     final mid = _modelIdCtrl.text.trim();
     if (mid.isEmpty) return;
-    _modelEntries.add(_ModelEntry(
-      id: mid,
-      name: mid,
-      context: int.tryParse(_modelCtxCtrl.text.trim()),
-    ));
+    // Context length is REQUIRED (drives compaction budgets); refuse an empty
+    // or non-positive value rather than silently dropping it.
+    final ctx = int.tryParse(_modelCtxCtrl.text.trim());
+    if (ctx == null || ctx <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.contextLengthRequired)));
+      return;
+    }
+    _modelEntries.add(_ModelEntry(id: mid, name: mid, context: ctx));
     _modelIdCtrl.clear();
     _modelCtxCtrl.clear();
     setState(() {});
   }
 
-  /// Selected models → [ProviderModel], auto-filling context length from the
-  /// models.dev template when it came from a preset provider.
+  /// Selected models → [ProviderModel]. Context length is REQUIRED: from the
+  /// models.dev template when it provides one, otherwise the user's entry.
   List<ProviderModel> _buildModels() {
     if (_template != null) {
       final byId = {for (final m in _template!.models) m.id: m};
@@ -511,6 +515,14 @@ class _AddProviderFormState extends State<_AddProviderForm> {
         .map((e) =>
             ProviderModel(id: e.id, name: e.name, contextLimit: e.context))
         .toList();
+  }
+
+  /// True when every selected model has a positive context length. The form
+  /// refuses to register otherwise.
+  bool _modelsHaveContext() {
+    final models = _buildModels();
+    return models.isNotEmpty &&
+        models.every((m) => (m.contextLimit ?? 0) > 0);
   }
 
   /// Manual model entry: tag-style chips (one per model id) + a context
@@ -619,8 +631,15 @@ class _AddProviderFormState extends State<_AddProviderForm> {
   }
 
   Future<void> _register() async {
-    setState(() => _registering = true);
     final modelList = _buildModels();
+    // context_limit is mandatory: block submission when any model lacks a
+    // positive value (manual entries or a template model with no limit).
+    if (modelList.isEmpty || modelList.any((m) => (m.contextLimit ?? 0) <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.contextLengthRequired)));
+      return;
+    }
+    setState(() => _registering = true);
     final updated = ProviderInfo(
       providerId: _id.text.trim(),
       apiType: _apiType,

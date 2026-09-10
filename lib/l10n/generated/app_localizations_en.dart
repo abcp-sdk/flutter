@@ -939,6 +939,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contextLengthLabel => 'context';
 
   @override
+  String get contextLengthRequired =>
+      'Context length is required (positive number).';
+
+  @override
   String get add => 'Add';
 
   @override

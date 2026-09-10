@@ -570,6 +570,7 @@
   "modelsLabel": "模型",
   "modelIdLabel": "模型 ID…",
   "contextLengthLabel": "上下文",
+  "contextLengthRequired": "必须填写上下文长度（正整数）。",
   "add": "添加",
   "enterToAddHint": "回车添加模型标签",
   "turnsByPreset": "最大轮数由所选预设决定。",

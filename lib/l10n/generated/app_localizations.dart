@@ -1796,6 +1796,12 @@ abstract class AppLocalizations {
   /// **'上下文'**
   String get contextLengthLabel;
 
+  /// No description provided for @contextLengthRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'必须填写上下文长度（正整数）。'**
+  String get contextLengthRequired;
+
   /// No description provided for @add.
   ///
   /// In zh, this message translates to:

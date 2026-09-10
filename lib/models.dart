@@ -809,41 +809,23 @@ class ToolParam {
 class ProviderModel {
   final String id;
   final String name;
+  /// Model context window (tokens). REQUIRED: it drives compaction budgets
+  /// and is never inferred from an external catalog.
   final int? contextLimit;
-  final int? outputLimit;
-  final int? maxTokens;
-  final int? temperature;
-  final bool reasoning;
-  final bool toolCall;
   ProviderModel({
     required this.id,
     required this.name,
     this.contextLimit,
-    this.outputLimit,
-    this.maxTokens,
-    this.temperature,
-    this.reasoning = false,
-    this.toolCall = false,
   });
   factory ProviderModel.fromJson(Map<String, dynamic> j) => ProviderModel(
         id: j['id'] as String? ?? '',
         name: j['name'] as String? ?? '',
         contextLimit: j['context_limit'] as int?,
-        outputLimit: j['output_limit'] as int?,
-        maxTokens: j['max_tokens'] as int?,
-        temperature: j['temperature'] as int?,
-        reasoning: j['reasoning'] as bool? ?? false,
-        toolCall: j['tool_call'] as bool? ?? false,
       );
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         if (contextLimit != null) 'context_limit': contextLimit,
-        if (outputLimit != null) 'output_limit': outputLimit,
-        if (maxTokens != null) 'max_tokens': maxTokens,
-        if (temperature != null) 'temperature': temperature,
-        'reasoning': reasoning,
-        'tool_call': toolCall,
       };
 }
 
@@ -903,7 +885,6 @@ class ModelInfo {
   final String name;
   final String providerId;
   final int? contextLimit;
-  final int? outputLimit;
   final bool reasoning;
   final bool toolCall;
   /// Selectable reasoning variants (models.dev catalog).
@@ -913,7 +894,6 @@ class ModelInfo {
     required this.name,
     this.providerId = '',
     this.contextLimit,
-    this.outputLimit,
     this.reasoning = false,
     this.toolCall = false,
     this.variants = const [],
@@ -923,7 +903,6 @@ class ModelInfo {
         name: j['name'] as String? ?? '',
         providerId: j['provider_id'] as String? ?? '',
         contextLimit: j['context_limit'] as int?,
-        outputLimit: j['output_limit'] as int?,
         reasoning: j['reasoning'] as bool? ?? false,
         toolCall: j['tool_call'] as bool? ?? false,
         variants: (j['variants'] as List? ?? [])

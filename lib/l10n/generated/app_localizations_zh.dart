@@ -933,6 +933,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contextLengthLabel => '上下文';
 
   @override
+  String get contextLengthRequired => '必须填写上下文长度（正整数）。';
+
+  @override
   String get add => '添加';
 
   @override

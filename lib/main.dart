@@ -10,8 +10,6 @@ import 'prefs.dart';
 import 'store.dart';
 import 'theme/app_theme.dart';
 
-const defaultBaseUrl = 'https://standalone-agent.temp.10.199.64.20.nip.io';
-
 void main() {
   runApp(const EasyLabApp());
 }
@@ -45,7 +43,7 @@ class _EasyLabAppState extends State<EasyLabApp> {
     await I18n.load();
     await Prefs.loadAgentLocale();
     final prefs = await Prefs.load();
-    final base = prefs.baseUrl?.isNotEmpty == true ? prefs.baseUrl! : defaultBaseUrl;
+    final base = prefs.baseUrl ?? '';
     if (mounted) {
       setState(() {
         _baseUrl = base;
