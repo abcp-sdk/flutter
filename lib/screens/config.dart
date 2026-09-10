@@ -517,16 +517,7 @@ class _AddProviderFormState extends State<_AddProviderForm> {
         .toList();
   }
 
-  /// True when every selected model has a positive context length. The form
-  /// refuses to register otherwise.
-  bool _modelsHaveContext() {
-    final models = _buildModels();
-    return models.isNotEmpty &&
-        models.every((m) => (m.contextLimit ?? 0) > 0);
-  }
-
   /// Manual model entry: tag-style chips (one per model id) + a context
-  /// length field. Context auto-fills when the model came from a template.
   Widget _manualModelEditor(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);

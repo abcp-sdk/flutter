@@ -42,6 +42,7 @@ class _EasyLabAppState extends State<EasyLabApp> {
     // Load persisted locale before the first build.
     await I18n.load();
     await Prefs.loadAgentLocale();
+    await Prefs.loadReadWatermarks();
     final prefs = await Prefs.load();
     final base = prefs.baseUrl ?? '';
     if (mounted) {

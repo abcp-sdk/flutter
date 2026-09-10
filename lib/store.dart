@@ -4,6 +4,7 @@ import 'api.dart';
 import 'enums.dart';
 import 'models.dart';
 import 'navigation.dart';
+import 'prefs.dart';
 
 /// Mirrors stores.svelte.ts: app-wide state + repository/file-outlook caching.
 class AppStore extends ChangeNotifier {
@@ -86,14 +87,25 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Open a repo in the code tab at the top of its stack.
-  /// Optimistically clear the local badge; the platform records the read
-  /// watermark server-side.
+  /// Optimistically clear the local badge. Read state is CLIENT-LOCAL (the
+  /// agent does not track it): record a per-session watermark so the row's
+  /// unread dot clears and stays clear.
   void markSessionRead(String id) {
+    Prefs.markRead(id, DateTime.now().toUtc().toIso8601String());
     sessions = sessions
         .map((s) => s.id == id ? s.copyWith(unreadCount: 0) : s)
         .toList();
     notifyListeners();
-    api.markRead(id).catchError((_) {});
+  }
+
+  /// True when the session's newest MESSAGE postdates the client's local read
+  /// watermark for it. A session with no message yet is never "unread".
+  bool isUnread(Session s) {
+    final at = s.lastMessageAt;
+    if (at.isEmpty) return false;
+    final marked = readWatermarks[s.id];
+    if (marked == null) return true;
+    return at.compareTo(marked) > 0;
   }
 
   void openOverlay(SessionOverlay v) {

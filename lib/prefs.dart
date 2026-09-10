@@ -7,6 +7,11 @@ const _kToken = 'token';
 const _kDark = 'dark_mode';
 const _kBackends = 'backends';
 const _kAgentLocale = 'agent_locale';
+const _kReadWatermarks = 'read_watermarks';
+
+/// A session id → ISO timestamp of the last time the user opened it. Used to
+/// derive the client-local unread dot (the agent does not track read state).
+Map<String, String> readWatermarks = {};
 
 /// Agent prompt/tool language preference. 'follow' uses the UI language;
 /// otherwise an explicit 'zh'/'en'.
@@ -86,8 +91,31 @@ class Prefs {
   }
 
   /// Effective locale string to send to the agent ('zh'/'en').
-  static String effectiveAgentLocale({required bool uiZh}) {
-    return agentLocaleValue == 'follow' ? (uiZh ? 'zh' : 'en') : agentLocaleValue;
+  static String effectiveAgentLocale({required bool uiZh}) =>
+      agentLocaleValue == 'follow'
+          ? (uiZh ? 'zh' : 'en')
+          : agentLocaleValue;
+
+  /// Load the per-session read watermarks (session id → ISO timestamp).
+  static Future<void> loadReadWatermarks() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_kReadWatermarks);
+      if (raw == null || raw.isEmpty) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      readWatermarks = {
+        for (final e in j.entries) e.key: '${e.value}',
+      };
+    } catch (_) {}
+  }
+
+  /// Record that [sessionId] was opened now (clears its unread dot).
+  static Future<void> markRead(String sessionId, String atIso) async {
+    readWatermarks[sessionId] = atIso;
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kReadWatermarks, jsonEncode(readWatermarks));
+    } catch (_) {}
   }
 
   /// Log out of the ACTIVE backend only (locale, dark mode and the saved
