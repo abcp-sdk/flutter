@@ -281,6 +281,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noTest => 'No test';
 
   @override
+  String get voiceStop => 'Stop & send';
+
+  @override
+  String get voiceRecording => 'Recording…';
+
+  @override
+  String get voicePermission => 'Microphone permission denied';
+
+  @override
+  String get recordVoice => 'Record voice';
+
+  @override
+  String get voiceTooShort => 'Recording too short';
+
+  @override
   String get capText => 'text';
 
   @override

@@ -281,6 +281,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noTest => '不可测试';
 
   @override
+  String get voiceStop => '停止并发送';
+
+  @override
+  String get voiceRecording => '录音中…';
+
+  @override
+  String get voicePermission => '未获得麦克风权限';
+
+  @override
+  String get recordVoice => '录制语音';
+
+  @override
+  String get voiceTooShort => '录音太短';
+
+  @override
   String get capText => '文本';
 
   @override

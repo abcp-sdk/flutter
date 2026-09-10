@@ -15,6 +15,7 @@ import '../prefs.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dialogs.dart';
+import '../services/voice.dart';
 import '../widgets/message_bubble.dart';
 
 /// Conversation page shown when a session is open. Owns the chat header,
@@ -155,6 +156,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
 
   @override
   void dispose() {
+    _voiceTicker?.cancel();
+    _voice.dispose();
     _scroll.removeListener(_onScroll);
     store.removeListener(_onStore);
     _msg?.removeListener(_onMsg);
@@ -190,6 +193,77 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
 
   List<UploadedFile> _pendingAttachments = [];
   final ImagePicker _picker = ImagePicker();
+
+  // ---- voice recording ----------------------------------------------------
+  final VoiceRecorder _voice = VoiceRecorder();
+  bool _recording = false;
+  Duration _voiceElapsed = Duration.zero;
+  Timer? _voiceTicker;
+
+  /// Toggle: start recording (mic permission flow) and swap the composer into
+  /// recording mode; stop uploads the clip as a normal attachment.
+  Future<void> _startRecording() async {
+    final ok = await _voice.start();
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.voicePermission)));
+      return;
+    }
+    setState(() {
+      _recording = true;
+      _voiceElapsed = Duration.zero;
+    });
+    _voiceTicker = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (!mounted || !_recording) return;
+      setState(() => _voiceElapsed = _voice.elapsed);
+    });
+  }
+
+  Future<void> _stopRecording() async {
+    _voiceTicker?.cancel();
+    _voiceTicker = null;
+    final src = await _voice.stop();
+    if (!mounted) return;
+    setState(() => _recording = false);
+    if (src != null) {
+      _uploadOne(src);
+    }
+  }
+
+  void _cancelRecording() {
+    _voiceTicker?.cancel();
+    _voiceTicker = null;
+    _voice.cancel();
+    if (mounted) setState(() => _recording = false);
+  }
+
+  /// The recording bar: elapsed time + cancel.
+  Widget _recordingBar(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(Icons.graphic_eq_rounded,
+              size: 16, color: colors.destructive),
+          const SizedBox(width: AppSpacing.sm),
+          Text(context.l10n.voiceRecording,
+              style: text.micro.copyWith(color: colors.destructive)),
+          const Spacer(),
+          TextButton(
+            style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact),
+            onPressed: _cancelRecording,
+            child: Text(context.l10n.cancel,
+                style:
+                    text.micro.copyWith(color: colors.mutedForeground)),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// Open the attach bottom sheet: camera / gallery / files. A selected item
   /// is uploaded immediately and shown (with an uploading state) above the
@@ -911,6 +985,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
             children: [
               if (_pendingAttachments.isNotEmpty)
                 _attachmentRow(context),
+              if (_recording) _recordingBar(context),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -920,20 +995,30 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                     icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
                   ),
                   Expanded(
-                    child: TextField(
-                      controller: _input,
-                      focusNode: _inputFocus,
-                      // Keep typing while the agent works (IM convention);
-                      // only the send button becomes a stop button.
-                      minLines: 1,
-                      maxLines: 6,
-                      textInputAction: TextInputAction.newline,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        hintText:
-                            _pendingAttachments.isEmpty ? context.l10n.typeMessage : '',
-                      ),
-                    ),
+                    child: _recording
+                        // Recording: show elapsed time instead of the text
+                        // field (tap-cancel lives in the bar above).
+                        ? Text(
+                            _formatDuration(_voiceElapsed),
+                            textAlign: TextAlign.center,
+                            style: text.meta.copyWith(
+                                color: colors.destructive,
+                                fontWeight: FontWeight.w600),
+                          )
+                        : TextField(
+                            controller: _input,
+                            focusNode: _inputFocus,
+                            // Keep typing while the agent works (IM convention);
+                            // only the send button becomes a stop button.
+                            minLines: 1,
+                            maxLines: 6,
+                            textInputAction: TextInputAction.newline,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText:
+                                  _pendingAttachments.isEmpty ? context.l10n.typeMessage : '',
+                            ),
+                          ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   sending
@@ -945,13 +1030,35 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                           icon: const Icon(Icons.stop_rounded, size: 20),
                           onPressed: () => m?.stop(),
                         )
-                      : IconButton.filled(
-                          onPressed:
-                              (_input.text.trim().isEmpty && _pendingAttachments.isEmpty)
-                                  ? null
-                                  : _send,
-                          icon: const Icon(Icons.send_rounded, size: 20),
-                        ),
+                      : _recording
+                          ? IconButton.filled(
+                              style: IconButton.styleFrom(
+                                backgroundColor: colors.destructive,
+                                foregroundColor: Colors.white,
+                              ),
+                              tooltip: context.l10n.voiceStop,
+                              icon: const Icon(Icons.stop_rounded, size: 20),
+                              onPressed: _stopRecording,
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: context.l10n.recordVoice,
+                                  onPressed: _startRecording,
+                                  icon: const Icon(Icons.mic_none_rounded,
+                                      size: 20),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                IconButton.filled(
+                                  onPressed: (_input.text.trim().isEmpty &&
+                                          _pendingAttachments.isEmpty)
+                                      ? null
+                                      : _send,
+                                  icon: const Icon(Icons.send_rounded, size: 20),
+                                ),
+                              ],
+                            ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -973,6 +1080,12 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         ),
       ),
     );
+  }
+
+  static String _formatDuration(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 
   static String _k(int n) {

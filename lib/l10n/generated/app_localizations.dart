@@ -620,6 +620,36 @@ abstract class AppLocalizations {
   /// **'不可测试'**
   String get noTest;
 
+  /// No description provided for @voiceStop.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止并发送'**
+  String get voiceStop;
+
+  /// No description provided for @voiceRecording.
+  ///
+  /// In zh, this message translates to:
+  /// **'录音中…'**
+  String get voiceRecording;
+
+  /// No description provided for @voicePermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'未获得麦克风权限'**
+  String get voicePermission;
+
+  /// No description provided for @recordVoice.
+  ///
+  /// In zh, this message translates to:
+  /// **'录制语音'**
+  String get recordVoice;
+
+  /// No description provided for @voiceTooShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'录音太短'**
+  String get voiceTooShort;
+
   /// No description provided for @capText.
   ///
   /// In zh, this message translates to:
