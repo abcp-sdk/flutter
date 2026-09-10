@@ -602,36 +602,30 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     String model = store.activeSession?.model ?? '';
     String preset = store.activeSession?.preset ?? '';
     String locale = store.activeSession?.locale ?? '';
+    // Provider→models tree from the registry (the source of truth for which
+    // provider owns which model). The model picker is two cascading dropdowns:
+    // pick a provider, then one of ITS models.
+    final providerModels = <String, List<ModelInfo>>{};
+    for (final m in _models) {
+      final pid = m.providerId.isNotEmpty ? m.providerId : '';
+      (providerModels[pid] ??= []).add(m);
+    }
+    // Seed the provider dropdown from the current model's owner (id match; a
+    // bare session value that is not in the registry falls back to the first
+    // provider that lists it, else empty).
+    String provider = '';
+    for (final e in providerModels.entries) {
+      if (e.value.any((m) => m.id == model)) {
+        provider = e.key;
+        break;
+      }
+    }
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          // Include the session's current value even if it is not among the
-          // registered options, otherwise the dropdown asserts.
-          final modelOptions = [
-            ..._models.map((m) => m.id),
-            if (model.isNotEmpty && !_models.any((m) => m.id == model)) model,
-          ];
-          // Display "model name —— provider". Models are sourced from the
-          // provider registry (each carries its provider_id); a model without
-          // a known provider simply shows its name.
-          String modelLabel(String id) {
-            for (final m in _models) {
-              if (m.id == id) {
-                final name = m.name.isNotEmpty ? m.name : m.id;
-                final prov = m.providerId;
-                return prov.isNotEmpty ? '$name —— $prov' : name;
-              }
-            }
-            return id;
-          }
-          // Group the model dropdown options by provider so the user sees which
-          // provider each model belongs to.
-          final providerMap = <String, List<ModelInfo>>{};
-          for (final m in _models) {
-            final pid = m.providerId.isNotEmpty ? m.providerId : 'default';
-            (providerMap[pid] ??= []).add(m);
-          }
+          final providerOptions = providerModels.keys.toList();
+          final modelsForProvider = providerModels[provider] ?? const [];
           final presetOptions = [
             ..._presets.map((p) => p.id),
             if (preset.isNotEmpty && !_presets.any((p) => p.id == preset))
@@ -651,38 +645,51 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Model grouped by provider. The model dropdown lists each
-                  // registered provider's models under the provider label.
+                  // 1) Provider. 2) Model (only this provider's models).
                   DropdownButtonFormField<String>(
-                    initialValue: model.isEmpty ? null : model,
+                    initialValue:
+                        provider.isEmpty && providerOptions.isNotEmpty
+                            ? null
+                            : provider,
                     items: [
-                      if (providerMap.length > 1)
-                        const DropdownMenuItem(value: '', child: Text('')),
-                      for (final entry in providerMap.entries)
-                        ...[
-                          if (providerMap.length > 1)
-                            DropdownMenuItem(
-                              value: '',
-                              enabled: false,
-                              child: Text(
-                                  entry.key == 'default'
-                                      ? ctx.l10n.providers
-                                      : entry.key,
-                                  style: textOf(ctx)
-                                      .meta
-                                      .copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: colorsOf(ctx).mutedForeground)),
-                            ),
-                          for (final m in entry.value)
-                            DropdownMenuItem(
-                                value: m.id, child: Text(modelLabel(m.id))),
-                        ],
-                      for (final id in modelOptions)
-                        if (!providerMap.keys.any((pid) =>
-                            providerMap[pid]?.any((m) => m.id == id) ?? false))
-                          DropdownMenuItem(
-                              value: id, child: Text(modelLabel(id))),
+                      if (providerOptions.isEmpty)
+                        DropdownMenuItem(
+                            value: '', child: Text(ctx.l10n.none)),
+                      for (final pid in providerOptions)
+                        DropdownMenuItem(
+                            value: pid,
+                            child: Text(pid.isEmpty ? ctx.l10n.providers : pid)),
+                    ],
+                    onChanged: (v) => setState(() {
+                      provider = v ?? '';
+                      // Reset the model when the provider changes so the second
+                      // dropdown only ever shows the chosen provider's models.
+                      final list = providerModels[provider] ?? const [];
+                      model = list.any((m) => m.id == model)
+                          ? model
+                          : (list.isNotEmpty ? list.first.id : '');
+                    }),
+                    decoration:
+                        InputDecoration(labelText: ctx.l10n.providers),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String>(
+                    initialValue:
+                        model.isEmpty ? null : model,
+                    items: [
+                      if (modelsForProvider.isEmpty)
+                        DropdownMenuItem(
+                            value: '', child: Text(ctx.l10n.none)),
+                      for (final m in modelsForProvider)
+                        DropdownMenuItem(
+                            value: m.id,
+                            child: Text(
+                                m.name.isNotEmpty ? m.name : m.id)),
+                      // Keep the session's current model selectable even if the
+                      // registry no longer lists it.
+                      if (model.isNotEmpty &&
+                          !modelsForProvider.any((m) => m.id == model))
+                        DropdownMenuItem(value: model, child: Text(model)),
                     ],
                     onChanged: (v) => setState(() => model = v ?? ''),
                     decoration: InputDecoration(labelText: ctx.l10n.modelLabel),
