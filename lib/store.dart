@@ -61,7 +61,11 @@ class AppStore extends ChangeNotifier {
 
   Future<void> deleteSession(String id) async {
     await api.deleteSession(id);
-    if (activeSessionId == id) activeSessionId = null;
+    // If the open conversation was the one deleted, close it (pops the chat
+    // stack back to the list) — otherwise the chat page would be left bound to
+    // a session that no longer exists. Covers the tablet case where the list
+    // is visible next to an open conversation.
+    if (activeSessionId == id) closeSession();
     await refreshSessions();
   }
 
@@ -69,14 +73,21 @@ class AppStore extends ChangeNotifier {
   /// sequentially so a single failure does not abort the rest.
   Future<List<String>> deleteSessions(List<String> ids) async {
     final failed = <String>[];
+    var closedActive = false;
     for (final id in ids) {
       try {
         await api.deleteSession(id);
-        if (activeSessionId == id) activeSessionId = null;
+        if (activeSessionId == id) {
+          activeSessionId = null;
+          closedActive = true;
+        }
       } catch (_) {
         failed.add(id);
       }
     }
+    // Reset the chat stack to the list so a deleted active session does not
+    // leave its conversation page open, then reload the (now shorter) list.
+    if (closedActive) closeSession();
     await refreshSessions();
     return failed;
   }
