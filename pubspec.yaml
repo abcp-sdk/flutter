@@ -26,6 +26,7 @@ dependencies:
     path: ../agent-sdk-dart
   connectrpc: ^2.0.0
   protobuf: ^6.0.0
+  http2: ^2.3.0
 
 dev_dependencies:
   flutter_test:

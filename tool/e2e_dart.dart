@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:agent_app/transport.dart';
 import 'package:agent_client_sdk/agent_client_sdk.dart' as sdk;
+import 'package:connectrpc/protobuf.dart';
+import 'package:connectrpc/protocol/connect.dart' as protocol;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart';
 
 // Mirrors the flutter app's AgentBindApi: the same SDK client, connectrpc,
@@ -10,8 +13,13 @@ Future<void> main() async {
   const base = 'http://127.0.0.1:8096';
   const tok = 'devtoken';
 
-  final client = sdk.AgentClient(baseUrl: base, token: tok);
-  final agent = client.agent;
+  final transport = protocol.Transport(
+    baseUrl: base,
+    codec: const ProtoCodec(),
+    httpClient: buildAgentHttpClient(),
+    interceptors: [agentBearerInterceptor(tok)],
+  );
+  final agent = sdk.AgentServiceClient(transport);
 
   // 1. health
   final h = await agent.health(sdk.HealthRequest());

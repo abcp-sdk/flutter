@@ -11,6 +11,7 @@ import 'package:connectrpc/protocol/connect.dart' as protocol;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart' as wkt;
 
 import 'models.dart';
+import 'transport.dart';
 
 /// Parsed watch/prompt stream event.
 class StreamEvent {
@@ -36,8 +37,8 @@ class AgentBindApi {
   final String token;
 
   // Strong-typed Connect client (h2 over TLS), direct to the agent. The
-  // transport is built here per the connectrpc convention (caller owns it);
-  // the SDK supplies only the generated client + buildHttpClient primitive.
+  // transport is built here (caller owns it); the SDK ships only the generated
+  // client + messages, no transport primitive.
   late final sdk.AgentServiceClient _agent;
 
   AgentBindApi({required this.baseUrl, required this.token})
@@ -63,8 +64,10 @@ class AgentBindApi {
     final transport = protocol.Transport(
       baseUrl: trimmed,
       codec: const ProtoCodec(),
-      httpClient: sdk.buildHttpClient(caPem: _tls?.caPem),
-      interceptors: [if (token.isNotEmpty) sdk.bearerInterceptor(token)],
+      httpClient: buildAgentHttpClient(caPem: _tls?.caPem),
+      interceptors: [
+        if (token.isNotEmpty) agentBearerInterceptor(token),
+      ],
     );
     return sdk.AgentServiceClient(transport);
   }
