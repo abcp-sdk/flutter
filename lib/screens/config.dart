@@ -1353,12 +1353,15 @@ class _ToolsDetailState extends State<_ToolsDetail> {
 
   /// Render an extension config knob — a plain text field + an explicit
   /// "Save" button (no enter-to-save surprise). Value is saved to the extId
-  /// (tool.category) config.
+  /// (tool.category) config. When a value is already set it is pre-filled so
+  /// the user can see/edit what is configured (like a settings form).
   Widget _extConfigEditor(ToolInfo tool, ToolConfig c) {
     final extId = tool.category; // the owning extension id
+    final current = _config[tool.name]?[c.name];
     return _ConfigTextField(
       label: c.name,
       description: c.description,
+      initialValue: current == null ? '' : '$current',
       onSave: (v) => _saveExtConfig(extId, c.name, v),
     );
   }
@@ -1388,15 +1391,18 @@ class _ToolsDetailState extends State<_ToolsDetail> {
 
 }
 
-/// A labelled config text field with an explicit Save button.
+/// A labelled config text field with an explicit Save button. [initialValue]
+/// pre-fills the field with the currently configured value (empty when unset).
 class _ConfigTextField extends StatefulWidget {
   final String label;
   final String description;
+  final String initialValue;
   final ValueChanged<String> onSave;
   const _ConfigTextField({
     required this.label,
     required this.description,
     required this.onSave,
+    this.initialValue = '',
   });
 
   @override
@@ -1404,7 +1410,19 @@ class _ConfigTextField extends StatefulWidget {
 }
 
 class _ConfigTextFieldState extends State<_ConfigTextField> {
-  final _controller = TextEditingController();
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialValue);
+
+  @override
+  void didUpdateWidget(covariant _ConfigTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reflect an externally-loaded/refreshed value (e.g. the async config load
+    // completing after first build) without stomping on what the user typed.
+    if (widget.initialValue != oldWidget.initialValue &&
+        _controller.text != widget.initialValue) {
+      _controller.text = widget.initialValue;
+    }
+  }
 
   @override
   void dispose() {
@@ -1416,6 +1434,7 @@ class _ConfigTextFieldState extends State<_ConfigTextField> {
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
+    final hasValue = _controller.text.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
       child: Column(
@@ -1426,7 +1445,16 @@ class _ConfigTextFieldState extends State<_ConfigTextField> {
                 style: text.micro.copyWith(color: colors.mutedForeground)),
           TextField(
             controller: _controller,
-            decoration: InputDecoration(labelText: widget.label),
+            decoration: InputDecoration(
+              labelText: widget.label,
+              // A configured knob is visually flagged so the user can tell
+              // "set" from "empty" at a glance.
+              prefixIcon: hasValue
+                  ? Icon(Icons.check_circle_rounded,
+                      size: 18, color: colors.success)
+                  : null,
+            ),
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: AppSpacing.xs),
           Align(
