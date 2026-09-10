@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../models.dart';
@@ -25,7 +23,6 @@ class _SessionListPageState extends State<SessionListPage> {
 
   bool _searching = false;
   final TextEditingController _q = TextEditingController();
-  Timer? _poll;
 
   // Batch selection: entered via the app-bar checkmark. While active, row taps
   // toggle membership and the app bar exposes select-all + delete.
@@ -36,16 +33,13 @@ class _SessionListPageState extends State<SessionListPage> {
   void initState() {
     super.initState();
     store.addListener(_onStore);
+    // The session list is driven by the store's watchSessions stream; this is
+    // just a first reconciliation in case the stream hasn't emitted yet.
     WidgetsBinding.instance.addPostFrameCallback((_) => store.refreshSessions());
-    // Keep previews / unread dots fresh while the list is visible.
-    _poll = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) store.refreshSessions();
-    });
   }
 
   @override
   void dispose() {
-    _poll?.cancel();
     store.removeListener(_onStore);
     _q.dispose();
     super.dispose();
@@ -281,6 +275,7 @@ class _SessionListPageState extends State<SessionListPage> {
                           isActive: active,
                           subtitle: preview,
                           unread: store.isUnread(s),
+                          unreadCount: store.unreadCountFor(s),
                           selectable: _selectMode,
                           selected: _selected.contains(s.id),
                           onTap: _selectMode

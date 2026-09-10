@@ -31,6 +31,20 @@ class StreamEvent {
   String str(String key) => params[key] as String? ?? '';
 }
 
+/// One frame of the `watchSessions` list stream. [snapshot] marks the initial
+/// full list (client replaces everything with [upserts]); otherwise [upserts]
+/// are per-session updates and [removed] are deleted names.
+class SessionListEvent {
+  final bool snapshot;
+  final List<Session> upserts;
+  final List<String> removed;
+  SessionListEvent({
+    this.snapshot = false,
+    this.upserts = const [],
+    this.removed = const [],
+  });
+}
+
 /// CA certificate (PEM) used on native HTTP/2-TLS. Ignored on web.
 class AgentTls {
   const AgentTls({this.caPem});
@@ -249,6 +263,17 @@ class AgentBindApi {
     });
   }
 
+  /// Real-time session-list stream: an initial full snapshot (upserts = the
+  /// whole list) followed by per-session upserts and removals. No polling.
+  Stream<SessionListEvent> watchSessions() {
+    final sdkStream = _agent.watchSessions(sdk.WatchSessionsRequest());
+    return sdkStream.map((e) => SessionListEvent(
+          snapshot: e.snapshot,
+          upserts: e.upserts.map(sessionFromPb).toList(),
+          removed: e.removed,
+        ));
+  }
+
   // ---- config / providers / models / presets / tools ----
 
   Future<void> setToolConfigValue(
@@ -428,6 +453,7 @@ Session sessionFromPb(sdk.Session s) => Session(
       unreadCount: s.unreadCount,
       lastMessageAt: s.lastMessageAt,
       lastMessagePreview: s.lastMessagePreview,
+      messageSeq: s.messageSeq,
     );
 
 Session _sessionFromSessionResults(sdk.Session? s) =>

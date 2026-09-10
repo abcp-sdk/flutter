@@ -8,10 +8,15 @@ const _kDark = 'dark_mode';
 const _kBackends = 'backends';
 const _kAgentLocale = 'agent_locale';
 const _kReadWatermarks = 'read_watermarks';
+const _kReadSeqs = 'read_seqs';
 
 /// A session id → ISO timestamp of the last time the user opened it. Used to
 /// derive the client-local unread dot (the agent does not track read state).
 Map<String, String> readWatermarks = {};
+
+/// A session id → the server `message_seq` the user had read when they last
+/// opened it. The unread count is `messageSeq - readSeq` (client-local).
+Map<String, int> readSeqs = {};
 
 /// Agent prompt/tool language preference. 'follow' uses the UI language;
 /// otherwise an explicit 'zh'/'en'.
@@ -101,20 +106,42 @@ class Prefs {
     try {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_kReadWatermarks);
-      if (raw == null || raw.isEmpty) return;
-      final j = jsonDecode(raw) as Map<String, dynamic>;
-      readWatermarks = {
-        for (final e in j.entries) e.key: '${e.value}',
-      };
+      if (raw != null && raw.isNotEmpty) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        readWatermarks = {
+          for (final e in j.entries) e.key: '${e.value}',
+        };
+      }
+      final rawSeqs = p.getString(_kReadSeqs);
+      if (rawSeqs != null && rawSeqs.isNotEmpty) {
+        final j2 = jsonDecode(rawSeqs) as Map<String, dynamic>;
+        readSeqs = {
+          for (final e in j2.entries)
+            e.key: (e.value is num) ? (e.value as num).toInt() : 0,
+        };
+      }
     } catch (_) {}
   }
 
-  /// Record that [sessionId] was opened now (clears its unread dot).
-  static Future<void> markRead(String sessionId, String atIso) async {
+  /// Record that [sessionId] was opened now (clears its unread dot/count).
+  static Future<void> markRead(String sessionId, String atIso,
+      {int? readSeq}) async {
     readWatermarks[sessionId] = atIso;
+    if (readSeq != null) readSeqs[sessionId] = readSeq;
     try {
       final p = await SharedPreferences.getInstance();
       await p.setString(_kReadWatermarks, jsonEncode(readWatermarks));
+      if (readSeq != null) {
+        await p.setString(_kReadSeqs, jsonEncode(readSeqs));
+      }
+    } catch (_) {}
+  }
+
+  /// Persist the current read-seq map (used to seed historical sessions).
+  static Future<void> saveReadSeqs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kReadSeqs, jsonEncode(readSeqs));
     } catch (_) {}
   }
 

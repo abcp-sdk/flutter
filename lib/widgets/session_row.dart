@@ -30,6 +30,8 @@ class SessionRow extends StatelessWidget {
   /// True when there is a newer message than the client's local read
   /// watermark for this session.
   final bool unread;
+  /// Number of unread messages (shown as a numeric badge when > 0).
+  final int unreadCount;
   /// Selection mode: when true the row shows a leading checkbox instead of the
   /// avatar and taps toggle selection rather than opening the session.
   final bool selectable;
@@ -43,6 +45,7 @@ class SessionRow extends StatelessWidget {
     required this.subtitle,
     required this.unread,
     required this.onTap,
+    this.unreadCount = 0,
     this.onLongPress,
     this.selectable = false,
     this.selected = false,
@@ -114,16 +117,9 @@ class SessionRow extends StatelessWidget {
                               style: text.micro
                                   .copyWith(color: colors.mutedForeground)),
                         ),
-                        if (unread && !isActive) ...[
+                        if (unread && !isActive && unreadCount > 0) ...[
                           const SizedBox(width: AppSpacing.xs),
-                          Container(
-                            width: 9,
-                            height: 9,
-                            decoration: BoxDecoration(
-                              color: colors.destructive,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
+                          _UnreadBadge(count: unreadCount),
                         ],
                       ],
                     ),
@@ -133,6 +129,36 @@ class SessionRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Small red pill showing the unread count (99+ past 99). Mirrors an IM app.
+class _UnreadBadge extends StatelessWidget {
+  final int count;
+  const _UnreadBadge({required this.count});
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18),
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: colors.destructive,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        label,
+        style: text.micro.copyWith(
+            color: Colors.white,
+            fontSize: 10,
+            height: 1,
+            fontWeight: FontWeight.w600),
       ),
     );
   }

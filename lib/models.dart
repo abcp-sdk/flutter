@@ -45,6 +45,10 @@ class Session {
   final String lastMessageAt;
   final String lastMessagePreview;
 
+  /// Monotonic per-session message counter (server-owned). The client derives
+  /// the unread count from `messageSeq - readSeq` (read state is local).
+  final int messageSeq;
+
   Session({
     required this.id,
     this.org = '',
@@ -67,6 +71,7 @@ class Session {
     this.unreadCount,
     this.lastMessageAt = '',
     this.lastMessagePreview = '',
+    this.messageSeq = 0,
   });
 
   factory Session.fromJson(Map<String, dynamic> j) => Session(
@@ -91,6 +96,7 @@ class Session {
         unreadCount: j['unread_count'] as int?,
         lastMessageAt: j['last_message_at'] as String? ?? '',
         lastMessagePreview: j['last_message_preview'] as String? ?? '',
+        messageSeq: j['message_seq'] as int? ?? 0,
       );
 
   String get sessionName =>
@@ -103,6 +109,9 @@ class Session {
     int? maxTurns,
     String? systemPrompt,
     int? unreadCount,
+    int? messageSeq,
+    String? lastMessageAt,
+    String? lastMessagePreview,
   }) =>
       Session(
         id: id,
@@ -123,8 +132,9 @@ class Session {
         createdAt: createdAt,
         updatedAt: updatedAt,
         unreadCount: unreadCount ?? this.unreadCount,
-        lastMessageAt: lastMessageAt,
-        lastMessagePreview: lastMessagePreview,
+        lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+        lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+        messageSeq: messageSeq ?? this.messageSeq,
       );
 }
 

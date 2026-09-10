@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import 'api.dart';
@@ -8,7 +11,9 @@ import 'prefs.dart';
 
 /// Mirrors stores.svelte.ts: app-wide state + repository/file-outlook caching.
 class AppStore extends ChangeNotifier {
-  AppStore(this.api);
+  AppStore(this.api) {
+    startSessionWatch();
+  }
 
   final AgentBindApi api;
 
@@ -16,12 +21,11 @@ class AppStore extends ChangeNotifier {
   List<Session> sessions = [];
   String? activeSessionId;
   SessionOverlay? sessionOverlay;
-  
+
   // timeline drill-in
-  
+
   // files overlay drill-in
-  
-                
+
   // file history / diff
 
   int sessionRevision = 0;
@@ -29,6 +33,78 @@ class AppStore extends ChangeNotifier {
   /// Last sessions-list load error ('' when healthy). Surfaced as a banner
   /// instead of silently showing an empty list.
   String sessionError = '';
+
+  // ---- real-time session list (watchSessions) -----------------------------
+  //
+  // One long-lived server stream replaces polling: an initial full snapshot,
+  // then per-session upserts/removals. Reconnects with backoff on drop.
+  StreamSubscription<SessionListEvent>? _sessionSub;
+  Timer? _sessionReconnect;
+  int _sessionAttempt = 0;
+  bool _firstSnapshot = true;
+  static const int _maxSessionAttempts = 20;
+
+  void startSessionWatch() {
+    _sessionReconnect?.cancel();
+    _sessionReconnect = null;
+    _sessionSub?.cancel();
+    _sessionSub = api.watchSessions().listen(
+      _applySessionEvent,
+      onError: (_) => _onSessionStreamClosed(),
+      onDone: _onSessionStreamClosed,
+      cancelOnError: false,
+    );
+  }
+
+  void _onSessionStreamClosed() {
+    if (_sessionAttempt >= _maxSessionAttempts) return;
+    final delay = Duration(
+        seconds: min(30, 1 << min(_sessionAttempt, 5)));
+    _sessionAttempt++;
+    _sessionReconnect?.cancel();
+    _sessionReconnect = Timer(delay, startSessionWatch);
+  }
+
+  void _applySessionEvent(SessionListEvent ev) {
+    _sessionAttempt = 0;
+    if (ev.snapshot) {
+      sessions = [...ev.upserts];
+      // First ever snapshot on this device: seed read watermarks so historical
+      // sessions don't all pop up as unread. Subsequent (new) sessions start
+      // unread at 0 so their messages count.
+      if (_firstSnapshot) {
+        _firstSnapshot = false;
+        for (final s in sessions) {
+          if (!readSeqs.containsKey(s.id)) {
+            readSeqs[s.id] = s.messageSeq;
+          }
+        }
+        Prefs.saveReadSeqs();
+      }
+    } else {
+      for (final s in ev.upserts) {
+        final i = sessions.indexWhere((x) => x.id == s.id);
+        if (i == -1) {
+          sessions = [...sessions, s];
+        } else {
+          sessions = [...sessions]..[i] = s;
+        }
+      }
+      if (ev.removed.isNotEmpty) {
+        sessions =
+            sessions.where((s) => !ev.removed.contains(s.id)).toList();
+      }
+    }
+    // The session currently open is being read live: advance its watermark as
+    // new messages stream in so returning to the list shows no stale badge.
+    final active = activeSession;
+    if (active != null && (readSeqs[active.id] ?? -1) < active.messageSeq) {
+      readSeqs[active.id] = active.messageSeq;
+      Prefs.saveReadSeqs();
+    }
+    sessionError = '';
+    notifyListeners();
+  }
 
   Session? get activeSession {
     for (final s in sessions) {
@@ -44,6 +120,8 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
+  /// Manual refresh (pull-to-refresh / fallback). Normally the list is driven
+  /// by [startSessionWatch]; this is a one-shot reconciliation.
   Future<void> refreshSessions() async {
     try {
       sessions = await api.listSessions();
@@ -115,25 +193,29 @@ class AppStore extends ChangeNotifier {
 
   /// Open a repo in the code tab at the top of its stack.
   /// Optimistically clear the local badge. Read state is CLIENT-LOCAL (the
-  /// agent does not track it): record a per-session watermark so the row's
+  /// agent does not track it): record a per-session read watermark so the row's
   /// unread dot clears and stays clear.
   void markSessionRead(String id) {
-    Prefs.markRead(id, DateTime.now().toUtc().toIso8601String());
+    final seq = sessionById(id)?.messageSeq ?? readSeqs[id] ?? 0;
+    Prefs.markRead(id, DateTime.now().toUtc().toIso8601String(), readSeq: seq);
     sessions = sessions
         .map((s) => s.id == id ? s.copyWith(unreadCount: 0) : s)
         .toList();
     notifyListeners();
   }
 
-  /// True when the session's newest MESSAGE postdates the client's local read
-  /// watermark for it. A session with no message yet is never "unread".
-  bool isUnread(Session s) {
-    final at = s.lastMessageAt;
-    if (at.isEmpty) return false;
-    final marked = readWatermarks[s.id];
-    if (marked == null) return true;
-    return at.compareTo(marked) > 0;
+  /// Unread message count for a session: messages appended since the client's
+  /// local read watermark (`messageSeq - readSeq`). A session the client has
+  /// never opened counts all of its messages from 0.
+  int unreadCountFor(Session s) {
+    final read = readSeqs[s.id];
+    if (read == null) return s.messageSeq;
+    final n = s.messageSeq - read;
+    return n > 0 ? n : 0;
   }
+
+  /// True when [s] has at least one unread message.
+  bool isUnread(Session s) => unreadCountFor(s) > 0;
 
   void openOverlay(SessionOverlay v) {
     if (activeSessionId == null) return;
