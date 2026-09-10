@@ -419,8 +419,17 @@ class MessageBubble extends StatelessWidget {
     final isSystem = msg.role == 'system' || msg.role == 'event';
     final isStreaming = msg.status == 'streaming';
 
+    // Reasoning (thinking) always renders ABOVE the rest of the message: the
+    // parts array is populated in event-arrival order, and the model may emit
+    // text before a subsequent reasoning block, which would otherwise place
+    // the answer above its own thinking. Stable partition keeps each group's
+    // relative order.
+    final ordered = <ChatPart>[
+      ...msg.parts.where((p) => p.type == 'reasoning'),
+      ...msg.parts.where((p) => p.type != 'reasoning'),
+    ];
     final parts = <Widget>[];
-    for (final part in msg.parts) {
+    for (final part in ordered) {
       if (part.type == 'text') {
         parts.add(_FileRefsText(text: part.text, api: _api));
       } else if (part.type == 'file') {
@@ -645,7 +654,9 @@ class _ReasoningBlock extends StatelessWidget {
     return _CollapseBlock(
       label: context.l10n.thinkLabel + (streaming ? '...' : ''),
       labelColor: colors.warning,
-      initiallyOpen: true,
+      // Expanded while streaming; collapsed by default once the turn is done
+      // (the user can still expand it manually).
+      initiallyOpen: streaming,
       textStyle: text_.micro
           .copyWith(color: colors.warning, fontWeight: FontWeight.w600),
       wrapper: (child) => Container(
@@ -722,6 +733,16 @@ class _CollapseBlock extends StatefulWidget {
 
 class _CollapseBlockState extends State<_CollapseBlock> {
   late bool _open = widget.initiallyOpen;
+
+  @override
+  void didUpdateWidget(_CollapseBlock old) {
+    super.didUpdateWidget(old);
+    // Follow a streaming→done transition (expand while streaming, auto-collapse
+    // when complete) unless the user has already toggled it in this instance.
+    if (old.initiallyOpen != widget.initiallyOpen) {
+      _open = widget.initiallyOpen;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

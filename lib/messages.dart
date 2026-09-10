@@ -156,6 +156,10 @@ class MessagesController extends ChangeNotifier {
     _reconnectAttempt = 0;
     _lastActivity = DateTime.now();
     _idleProbeTimer?.cancel();
+    // Drop any locally-held streaming bubble BEFORE (re)connecting: it may be
+    // a stale/revoked turn. The server replays only the live run, so a fresh
+    // bubble (if the session is busy) is rebuilt from that replay.
+    _resetStreamingBubble();
     _sub = api.streamEvents(sid).listen(
       _handleEvent,
       onError: (_) => _onStreamClosed(sid),
@@ -163,6 +167,15 @@ class MessagesController extends ChangeNotifier {
       cancelOnError: false,
     );
     _startIdleProbe();
+  }
+
+  /// Remove any lingering streaming bubbles (stale optimistic / reconnect /
+  /// revoked). Used before reconnecting and before a revert re-fetch.
+  void _resetStreamingBubble() {
+    _streamingId = null;
+    if (messages.any((m) => m.status == 'streaming')) {
+      messages = messages.where((m) => m.status != 'streaming').toList();
+    }
   }
 
   /// One stream closed (done/error). If it's still the active session, re-arm
@@ -518,12 +531,12 @@ class MessagesController extends ChangeNotifier {
     if (sending) {
       await api.interrupt(getSessionId());
     }
-    // Undo moves the backend tip back (append-only chain). Re-fetch the whole
-    // chain rather than locally truncating: the server is authoritative and
-    // re-reading it avoids resurrecting withdrawn messages or racing a
-    // mid-stream turn.
+    // Undo moves the backend tip back (append-only chain). Drop any local
+    // streaming bubble FIRST (it may hold now-withdrawn deltas) and re-fetch
+    // the authoritative chain; otherwise the stale streaming bubble survives
+    // the merge and keeps showing revoked content.
     await api.revert(getSessionId(), messageId);
-    _streamingId = null;
+    _resetStreamingBubble();
     sending = false;
     await _fetchMessages();
   }
