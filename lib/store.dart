@@ -65,6 +65,22 @@ class AppStore extends ChangeNotifier {
     await refreshSessions();
   }
 
+  /// Delete several sessions, returning the ids that failed. Deletes run
+  /// sequentially so a single failure does not abort the rest.
+  Future<List<String>> deleteSessions(List<String> ids) async {
+    final failed = <String>[];
+    for (final id in ids) {
+      try {
+        await api.deleteSession(id);
+        if (activeSessionId == id) activeSessionId = null;
+      } catch (_) {
+        failed.add(id);
+      }
+    }
+    await refreshSessions();
+    return failed;
+  }
+
   Future<bool> forkSession(String branch) async {
     final id = sessionById(activeSessionId ?? '')?.id;
     if (id == null) return false;
@@ -119,9 +135,14 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Close the open conversation and return the chat tab to its session list.
+  /// Drops every chat page above the root (conversation + any sub-page) so the
+  /// user is always back on the list — never left on a deleted session.
   void closeSession() {
     activeSessionId = null;
     sessionOverlay = null;
+    final list = _stackFor(SiderTab.chat);
+    if (list.length > 1) list.removeRange(1, list.length);
     notifyListeners();
   }
 

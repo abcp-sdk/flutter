@@ -27,6 +27,11 @@ class _SessionListPageState extends State<SessionListPage> {
   final TextEditingController _q = TextEditingController();
   Timer? _poll;
 
+  // Batch selection: entered via the app-bar checkmark. While active, row taps
+  // toggle membership and the app bar exposes select-all + delete.
+  bool _selectMode = false;
+  final Set<String> _selected = {};
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +53,61 @@ class _SessionListPageState extends State<SessionListPage> {
 
   void _onStore() {
     if (mounted) setState(() {});
+  }
+
+  void _enterSelect() {
+    setState(() {
+      _selectMode = true;
+      _searching = false;
+      _q.clear();
+      _selected.clear();
+    });
+  }
+
+  void _exitSelect() {
+    setState(() {
+      _selectMode = false;
+      _selected.clear();
+    });
+  }
+
+  void _toggle(String id) {
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
+  }
+
+  void _toggleAll() {
+    setState(() {
+      final ids = _filtered.map((s) => s.id).toSet();
+      if (_selected.length == ids.length) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(ids);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selected.isEmpty) return;
+    final n = _selected.length;
+    final ok = await confirmDialog(context,
+        title: context.l10n.deleteSessionsTitle,
+        description: context.l10n.deleteSessionsBody('$n'));
+    if (ok != true) return;
+    final ids = _selected.toList();
+    final failed = await store.deleteSessions(ids);
+    if (!mounted) return;
+    setState(() {
+      _selectMode = false;
+      _selected.clear();
+    });
+    if (failed.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.failed('${failed.length}'))));
+    }
   }
 
   List<Session> get _sorted {
@@ -88,44 +148,87 @@ class _SessionListPageState extends State<SessionListPage> {
     final colors = colorsOf(context);
     final text = textOf(context);
     final sessions = _filtered;
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leading: _searching
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () {
-                  _q.clear();
-                  setState(() => _searching = false);
-                },
-              )
-            : null,
-        title: _searching
-            ? TextField(
-                controller: _q,
-                autofocus: true,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: context.l10n.searchHint,
-                  border: InputBorder.none,
-                  prefixIcon: const Icon(Icons.search_rounded),
-                ),
-              )
-            : Text(context.l10n.tabChat),
-        actions: [
-          if (!_searching)
-            IconButton(
-              icon: Icon(Icons.search_rounded, color: colors.primary),
-              tooltip: context.l10n.search,
-              onPressed: () => setState(() => _searching = true),
-            ),
-          IconButton(
-            icon: Icon(Icons.add_rounded, color: colors.primary),
-            tooltip: context.l10n.newSession,
-            onPressed: _create,
-          ),
-        ],
-      ),
+    return PopScope(
+      // Back exits selection/search instead of leaving the tab.
+      canPop: !_selectMode && !_searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_selectMode) {
+          _exitSelect();
+        } else if (_searching) {
+          _q.clear();
+          setState(() => _searching = false);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: _selectMode
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: context.l10n.cancel,
+                  onPressed: _exitSelect,
+                )
+              : _searching
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      onPressed: () {
+                        _q.clear();
+                        setState(() => _searching = false);
+                      },
+                    )
+                  : null,
+          title: _selectMode
+              ? Text(context.l10n.selectedCount('${_selected.length}'))
+              : _searching
+                  ? TextField(
+                      controller: _q,
+                      autofocus: true,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: context.l10n.searchHint,
+                        border: InputBorder.none,
+                        prefixIcon: const Icon(Icons.search_rounded),
+                      ),
+                    )
+                  : Text(context.l10n.tabChat),
+          actions: _selectMode
+              ? [
+                  IconButton(
+                    icon: const Icon(Icons.select_all_rounded),
+                    tooltip: context.l10n.selectAll,
+                    onPressed: _toggleAll,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.delete_outline_rounded,
+                      color: _selected.isEmpty
+                          ? colors.mutedForeground
+                          : colors.destructive,
+                    ),
+                    tooltip: context.l10n.delete,
+                    onPressed: _selected.isEmpty ? null : _deleteSelected,
+                  ),
+                ]
+              : [
+                  if (!_searching)
+                    IconButton(
+                      icon: Icon(Icons.search_rounded, color: colors.primary),
+                      tooltip: context.l10n.search,
+                      onPressed: () => setState(() => _searching = true),
+                    ),
+                  IconButton(
+                    icon: Icon(Icons.checklist_rounded, color: colors.primary),
+                    tooltip: context.l10n.selectSessions,
+                    onPressed: _enterSelect,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.add_rounded, color: colors.primary),
+                    tooltip: context.l10n.newSession,
+                    onPressed: _create,
+                  ),
+                ],
+        ),
       body: Column(
         children: [
           const Divider(height: 1),
@@ -178,14 +281,21 @@ class _SessionListPageState extends State<SessionListPage> {
                           isActive: active,
                           subtitle: preview,
                           unread: store.isUnread(s),
-                          onTap: () => store.pickSession(s.id),
-                          onLongPress: () => _sessionActions(s),
+                          selectable: _selectMode,
+                          selected: _selected.contains(s.id),
+                          onTap: _selectMode
+                              ? () => _toggle(s.id)
+                              : () => store.pickSession(s.id),
+                          onLongPress: _selectMode
+                              ? null
+                              : () => _sessionActions(s),
                         );
                       },
                     ),
             ),
           ),
         ],
+      ),
       ),
     );
   }

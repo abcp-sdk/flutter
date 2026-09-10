@@ -253,6 +253,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get deleteSessionsTitle => 'Delete sessions';
+
+  @override
+  String deleteSessionsBody(String arg1) {
+    return 'Delete $arg1 selected sessions? This cannot be undone.';
+  }
+
+  @override
+  String get selectSessions => 'Select';
+
+  @override
+  String get selectAll => 'Select all';
+
+  @override
+  String get selectNone => 'Deselect all';
+
+  @override
+  String selectedCount(String arg1) {
+    return '$arg1 selected';
+  }
+
+  @override
   String get newOrg => 'New organization';
 
   @override

@@ -582,10 +582,14 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     if (ok == true) {
       try {
         await store.deleteSession(sid);
-      } catch (_) {
-        await store.deleteSession(sid);
+        // Return to the session list once the session is gone — leaving the
+        // conversation open would show a session that no longer exists.
+        store.closeSession();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(context.l10n.failed('$e'))));
       }
-      store.closeSession();
     }
   }
 

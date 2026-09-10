@@ -253,6 +253,28 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get deleteSessionsTitle => '删除会话';
+
+  @override
+  String deleteSessionsBody(String arg1) {
+    return '删除选中的 $arg1 个会话？此操作不可撤销。';
+  }
+
+  @override
+  String get selectSessions => '选择';
+
+  @override
+  String get selectAll => '全选';
+
+  @override
+  String get selectNone => '取消全选';
+
+  @override
+  String selectedCount(String arg1) {
+    return '已选 $arg1 项';
+  }
+
+  @override
   String get newOrg => '新建组织';
 
   @override

@@ -101,6 +101,26 @@
       }
     }
   },
+  "deleteSessionsTitle": "删除会话",
+  "deleteSessionsBody": "删除选中的 {arg1} 个会话？此操作不可撤销。",
+  "@deleteSessionsBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "selectSessions": "选择",
+  "selectAll": "全选",
+  "selectNone": "取消全选",
+  "selectedCount": "已选 {arg1} 项",
+  "@selectedCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
   "newOrg": "新建组织",
   "orgNameLabel": "组织名称",
   "newRepoIn": "在 {arg1} 新建仓库",

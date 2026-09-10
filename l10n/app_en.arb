@@ -101,6 +101,26 @@
       }
     }
   },
+  "deleteSessionsTitle": "Delete sessions",
+  "deleteSessionsBody": "Delete {arg1} selected sessions? This cannot be undone.",
+  "@deleteSessionsBody": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "selectSessions": "Select",
+  "selectAll": "Select all",
+  "selectNone": "Deselect all",
+  "selectedCount": "{arg1} selected",
+  "@selectedCount": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
   "newOrg": "New organization",
   "orgNameLabel": "Organization name",
   "newRepoIn": "New repo in {arg1}",

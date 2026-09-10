@@ -572,6 +572,42 @@ abstract class AppLocalizations {
   /// **'删除会话\"{arg1}\"？'**
   String deleteSessionBody(String arg1);
 
+  /// No description provided for @deleteSessionsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除会话'**
+  String get deleteSessionsTitle;
+
+  /// No description provided for @deleteSessionsBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除选中的 {arg1} 个会话？此操作不可撤销。'**
+  String deleteSessionsBody(String arg1);
+
+  /// No description provided for @selectSessions.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择'**
+  String get selectSessions;
+
+  /// No description provided for @selectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全选'**
+  String get selectAll;
+
+  /// No description provided for @selectNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消全选'**
+  String get selectNone;
+
+  /// No description provided for @selectedCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已选 {arg1} 项'**
+  String selectedCount(String arg1);
+
   /// No description provided for @newOrg.
   ///
   /// In zh, this message translates to:

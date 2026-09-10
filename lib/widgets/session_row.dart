@@ -30,6 +30,10 @@ class SessionRow extends StatelessWidget {
   /// True when there is a newer message than the client's local read
   /// watermark for this session.
   final bool unread;
+  /// Selection mode: when true the row shows a leading checkbox instead of the
+  /// avatar and taps toggle selection rather than opening the session.
+  final bool selectable;
+  final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   const SessionRow({
@@ -40,6 +44,8 @@ class SessionRow extends StatelessWidget {
     required this.unread,
     required this.onTap,
     this.onLongPress,
+    this.selectable = false,
+    this.selected = false,
   });
 
   @override
@@ -50,8 +56,11 @@ class SessionRow extends StatelessWidget {
     final stamp = wechatTime(
         context, s.lastMessageAt.isNotEmpty ? s.lastMessageAt : s.updatedAt);
     return Material(
-      color:
-          isActive ? colors.primary.withValues(alpha: 0.10) : Colors.transparent,
+      color: selected
+          ? colors.primary.withValues(alpha: 0.14)
+          : isActive
+              ? colors.primary.withValues(alpha: 0.10)
+              : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -60,9 +69,19 @@ class SessionRow extends StatelessWidget {
               horizontal: AppSpacing.md, vertical: AppSpacing.sm),
           child: Row(
             children: [
-              // The avatar is seeded by the session name (branch slot), so a
-              // given session always renders the same color + honeycomb.
-              ChatAvatar(org: '', repo: '', branch: s.id, radius: 20),
+              // In selection mode the avatar becomes a checkbox (tap toggles).
+              if (selectable) ...[
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: selected ? colors.primary : colors.mutedForeground,
+                  size: 24,
+                ),
+              ] else
+                // The avatar is seeded by the session name (branch slot), so a
+                // given session always renders the same color + honeycomb.
+                ChatAvatar(org: '', repo: '', branch: s.id, radius: 20),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
