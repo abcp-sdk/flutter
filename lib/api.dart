@@ -378,25 +378,95 @@ Session sessionFromPb(sdk.Session s) => Session(
 Session _sessionFromSessionResults(sdk.Session? s) =>
     s == null ? Session(id: '') : sessionFromPb(s);
 
-Message messageFromPb(sdk.Message m) => Message(
-      id: m.id,
-      role: m.role,
-      createdAt: m.createdAt.isEmpty ? null : m.createdAt,
-      parts: m.parts.map(_partFromPb).toList(),
-    );
+Message messageFromPb(sdk.Message m) {
+  // Pair each tool call with its result (tool_use_id) so history renders one
+  // tool card (with output) per call, matching the live stream shape.
+  final decoded = m.parts.map((p) => (p, _decodeJson(p.data))).toList();
+  final results = <String, Map<String, dynamic>>{};
+  for (final (p, d) in decoded) {
+    if (p.type == 'tool_result') {
+      final id = (d['tool_use_id'] as String?) ?? '';
+      if (id.isNotEmpty) results[id] = d;
+    }
+  }
+  final parts = <MessagePart>[];
+  for (final (p, d) in decoded) {
+    switch (p.type) {
+      case 'text':
+        parts.add(MessagePart(
+          id: p.id,
+          type: 'text',
+          text: (d['text'] as String?) ?? '',
+        ));
+      case 'summary':
+      case 'compaction':
+        parts.add(MessagePart(
+          id: p.id,
+          type: 'compaction',
+          text: (d['summary'] as String?) ?? '',
+        ));
+      case 'file':
+        parts.add(MessagePart(
+          id: p.id,
+          type: 'file',
+          code: (d['code'] as String?) ?? '',
+          name: (d['name'] as String?) ?? '',
+          mime: d['mime'] as String?,
+          size: (d['size'] as num?)?.toInt(),
+        ));
+      case 'tool':
+        final callId = (d['id'] as String?) ?? p.messageId;
+        final res = results[callId];
+        final content = res?['content'];
+        parts.add(MessagePart(
+          id: p.id,
+          type: 'tool',
+          tool: (d['name'] as String?) ?? '',
+          toolCallId: callId,
+          state: ToolState(
+            status: res != null ? 'complete' : 'running',
+            title: (d['name'] as String?) ?? '',
+            input: (d['input'] as Map?)?.cast<String, dynamic>(),
+            output: content is String ? content : null,
+          ),
+        ));
+      case 'tool_result':
+        // Merged into its tool part above; render standalone only when the
+        // call part is missing (defensive).
+        final id = (d['tool_use_id'] as String?) ?? p.messageId;
+        if (results[id] != null && m.parts.any((q) => q.type == 'tool')) {
+          break;
+        }
+        final content = d['content'];
+        parts.add(MessagePart(
+          id: p.id,
+          type: 'tool',
+          tool: '',
+          toolCallId: id,
+          state: ToolState(
+            status: 'complete',
+            output: content is String ? content : null,
+          ),
+        ));
+    }
+  }
+  return Message(
+    id: m.id,
+    role: m.role,
+    createdAt: m.createdAt.isEmpty ? null : m.createdAt,
+    parts: parts,
+  );
+}
 
-MessagePart _partFromPb(sdk.Part p) => MessagePart(
-      id: p.id,
-      type: p.type,
-      text: p.type == 'text' ? _decodePartData(p.data) : null,
-      tool: p.type == 'tool' ? p.data : null,
-      toolCallId: p.messageId,
-      code: p.type == 'file' ? p.data : null,
-      name: p.type == 'file' ? p.data : null,
-      mime: null,
-    );
-
-String _decodePartData(String data) => data;
+Map<String, dynamic> _decodeJson(String data) {
+  if (data.isEmpty) return const {};
+  try {
+    final v = jsonDecode(data);
+    return v is Map<String, dynamic> ? v : const {};
+  } catch (_) {
+    return const {};
+  }
+}
 
 class StructUtils {
   static Map<String, dynamic> toJson(wkt.Struct? st) {
