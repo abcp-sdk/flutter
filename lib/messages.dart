@@ -31,6 +31,15 @@ class MessagesController extends ChangeNotifier {
   int _reconnectAttempt = 0;
   String? _subSid;
 
+  // Stream dedup + run tracking. The server stamps each event with a stable
+  // `eid` (dedup across the subscribe/replay overlap) and a per-turn `run_id`.
+  // `_awaitingRun` is true from the moment a (re)connect is opened until the
+  // first event arrives: at that point any stale streaming bubble from a
+  // previous view of the session is discarded and rebuilt from the replay.
+  final Set<String> _seenEids = <String>{};
+  String? _activeRunId;
+  bool _awaitingRun = false;
+
   static const int _maxReconnectAttempts = 10;
   static const Duration _initialReconnect = Duration(seconds: 1);
   static const Duration _maxReconnect = Duration(seconds: 30);
@@ -156,10 +165,13 @@ class MessagesController extends ChangeNotifier {
     _reconnectAttempt = 0;
     _lastActivity = DateTime.now();
     _idleProbeTimer?.cancel();
-    // Drop any locally-held streaming bubble BEFORE (re)connecting: it may be
-    // a stale/revoked turn. The server replays only the live run, so a fresh
-    // bubble (if the session is busy) is rebuilt from that replay.
-    _resetStreamingBubble();
+    // Do NOT clear the streaming bubble here: the server may be replaying the
+    // live run, and clearing before events arrive races the concurrent
+    // history fetch. Instead, arm a run boundary: the FIRST event of the new
+    // connection resets stale streaming state and starts building fresh.
+    _seenEids.clear();
+    _activeRunId = null;
+    _awaitingRun = true;
     _sub = api.streamEvents(sid).listen(
       _handleEvent,
       onError: (_) => _onStreamClosed(sid),
@@ -169,10 +181,11 @@ class MessagesController extends ChangeNotifier {
     _startIdleProbe();
   }
 
-  /// Remove any lingering streaming bubbles (stale optimistic / reconnect /
-  /// revoked). Used before reconnecting and before a revert re-fetch.
-  void _resetStreamingBubble() {
+  /// Drop the streaming bubble + its run linkage (used at a run boundary and
+  /// before a revert re-fetch). History (complete) messages are untouched.
+  void _clearStreaming() {
     _streamingId = null;
+    _activeRunId = null;
     if (messages.any((m) => m.status == 'streaming')) {
       messages = messages.where((m) => m.status != 'streaming').toList();
     }
@@ -228,6 +241,27 @@ class MessagesController extends ChangeNotifier {
 
   void _handleEvent(StreamEvent ev) {
     _markActivity();
+    // Dedup: the subscribe/replay handover overlaps, so the same eid can be
+    // delivered twice. Drop repeats before they double-append deltas.
+    if (ev.eid.isNotEmpty) {
+      if (_seenEids.contains(ev.eid)) return;
+      _seenEids.add(ev.eid);
+      if (_seenEids.length > 20000) _seenEids.clear();
+    }
+    // Run boundary: the first event of a (re)connection (or the first event of
+    // a NEW run) discards any stale/withdrawn streaming bubble so replay
+    // rebuilds it cleanly. `status busy` is the canonical first event of a run.
+    final run = ev.runId;
+    if (_awaitingRun) {
+      _awaitingRun = false;
+      _clearStreaming();
+    }
+    if (run.isNotEmpty && run != _activeRunId) {
+      // A different run started (or replay of the current one begins):
+      // replace the previous run's placeholder bubble.
+      if (_activeRunId != null) _clearStreaming();
+      _activeRunId = run;
+    }
     for (final cb in _sessionListeners) {
       try {
         cb(ev.event, ev.params);
@@ -449,6 +483,7 @@ class MessagesController extends ChangeNotifier {
         .toList();
     messages = next;
     _streamingId = null;
+    _activeRunId = null;
     sending = false;
     notifyListeners();
   }
@@ -536,7 +571,7 @@ class MessagesController extends ChangeNotifier {
     // the authoritative chain; otherwise the stale streaming bubble survives
     // the merge and keeps showing revoked content.
     await api.revert(getSessionId(), messageId);
-    _resetStreamingBubble();
+    _clearStreaming();
     sending = false;
     await _fetchMessages();
   }

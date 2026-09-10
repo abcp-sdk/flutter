@@ -18,7 +18,14 @@ import 'transport.dart';
 class StreamEvent {
   final String event;
   final Map<String, dynamic> params;
-  StreamEvent(this.event, Map<String, dynamic>? params)
+
+  /// Per-event id from the server (dedup key across replay/live overlap).
+  final String eid;
+
+  /// Turn id this event belongs to (stamped by the server), if present.
+  final String runId;
+
+  StreamEvent(this.event, Map<String, dynamic>? params, {this.eid = '', this.runId = ''})
       : params = params ?? const {};
   dynamic get(String key) => params[key];
   String str(String key) => params[key] as String? ?? '';
@@ -230,9 +237,16 @@ class AgentBindApi {
   Stream<StreamEvent> streamEvents(String sessionId) {
     final sdkStream =
         _agent.watchSession(sdk.WatchSessionRequest(id: sessionId));
-    return sdkStream.map((e) => StreamEvent(
+    return sdkStream.map((e) {
+      final params = StructUtils.toJson(e.params);
+      final runId = params['run_id'];
+      return StreamEvent(
         e.event,
-        StructUtils.toJson(e.params)));
+        params,
+        eid: e.eid,
+        runId: runId is String ? runId : '',
+      );
+    });
   }
 
   // ---- config / providers / models / presets / tools ----
