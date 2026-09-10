@@ -33,7 +33,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   final ScrollController _scroll = ScrollController();
   final FocusNode _inputFocus = FocusNode();
   MessagesController? _msg;
-  List<ModelInfo> _models = [];
+  Map<String, ProviderInfo> _providers = {};
   List<Preset> _presets = [];
   bool _initialScrollDone = false;
   // The session id the current _msg controller is bound to (set in _setup).
@@ -71,8 +71,11 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   }
 
   Future<void> _loadMeta() async {
+    // Providers (id → ProviderInfo with its models) drive the provider → model
+    // cascade in session settings. `listModels` is per-provider, so the app
+    // only fetches a provider's models when it is selected.
     try {
-      _models = await widget.store.api.models();
+      _providers = await widget.store.api.providers();
     } catch (_) {}
     try {
       _presets = await widget.store.api.presets(
@@ -602,30 +605,49 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     String model = store.activeSession?.model ?? '';
     String preset = store.activeSession?.preset ?? '';
     String locale = store.activeSession?.locale ?? '';
-    // Provider→models tree from the registry (the source of truth for which
-    // provider owns which model). The model picker is two cascading dropdowns:
-    // pick a provider, then one of ITS models.
-    final providerModels = <String, List<ModelInfo>>{};
-    for (final m in _models) {
-      final pid = m.providerId.isNotEmpty ? m.providerId : '';
-      (providerModels[pid] ??= []).add(m);
-    }
-    // Seed the provider dropdown from the current model's owner (id match; a
-    // bare session value that is not in the registry falls back to the first
-    // provider that lists it, else empty).
+    // Cascading provider → model. provider_id is REQUIRED by the agent (a
+    // global model list is rejected), so the provider dropdown has no "all"
+    // option: pick the owner of the session's current model (else the first
+    // registered provider), then load only that provider's models.
+    final providerIds = _providers.keys.toList();
     String provider = '';
-    for (final e in providerModels.entries) {
-      if (e.value.any((m) => m.id == model)) {
-        provider = e.key;
+    for (final id in providerIds) {
+      if (_providers[id]!.models.any((m) => m.id == model)) {
+        provider = id;
         break;
+      }
+    }
+    if (provider.isEmpty && providerIds.isNotEmpty) provider = providerIds.first;
+    List<ModelInfo> modelsForProvider = [];
+    bool loadingModels = true;
+    Future<void> loadModels(
+      void Function(void Function()) setState,
+    ) async {
+      setState(() => loadingModels = true);
+      try {
+        final list = await store.api.models(providerId: provider);
+        setState(() {
+          modelsForProvider = list;
+          loadingModels = false;
+          // Keep the current model if still valid, else default to the first.
+          if (!list.any((m) => m.id == model)) {
+            model = list.isNotEmpty ? list.first.id : model;
+          }
+        });
+      } catch (_) {
+        if (mounted) setState(() => loadingModels = false);
       }
     }
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          final providerOptions = providerModels.keys.toList();
-          final modelsForProvider = providerModels[provider] ?? const [];
+          if (loadingModels && modelsForProvider.isEmpty && provider.isNotEmpty) {
+            // First open: kick off the initial model load once.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (modelsForProvider.isEmpty) loadModels(setState);
+            });
+          }
           final presetOptions = [
             ..._presets.map((p) => p.id),
             if (preset.isNotEmpty && !_presets.any((p) => p.id == preset))
@@ -645,37 +667,28 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1) Provider. 2) Model (only this provider's models).
+                  // 1) Provider. 2) Model (fetched for the chosen provider).
                   DropdownButtonFormField<String>(
                     initialValue:
-                        provider.isEmpty && providerOptions.isNotEmpty
-                            ? null
-                            : provider,
+                        providerIds.contains(provider) ? provider : null,
                     items: [
-                      if (providerOptions.isEmpty)
+                      if (providerIds.isEmpty)
                         DropdownMenuItem(
                             value: '', child: Text(ctx.l10n.none)),
-                      for (final pid in providerOptions)
-                        DropdownMenuItem(
-                            value: pid,
-                            child: Text(pid.isEmpty ? ctx.l10n.providers : pid)),
+                      for (final pid in providerIds)
+                        DropdownMenuItem(value: pid, child: Text(pid)),
                     ],
-                    onChanged: (v) => setState(() {
+                    onChanged: (v) {
                       provider = v ?? '';
-                      // Reset the model when the provider changes so the second
-                      // dropdown only ever shows the chosen provider's models.
-                      final list = providerModels[provider] ?? const [];
-                      model = list.any((m) => m.id == model)
-                          ? model
-                          : (list.isNotEmpty ? list.first.id : '');
-                    }),
+                      setState(() => modelsForProvider = []);
+                      loadModels(setState);
+                    },
                     decoration:
                         InputDecoration(labelText: ctx.l10n.providers),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   DropdownButtonFormField<String>(
-                    initialValue:
-                        model.isEmpty ? null : model,
+                    initialValue: model.isEmpty ? null : model,
                     items: [
                       if (modelsForProvider.isEmpty)
                         DropdownMenuItem(

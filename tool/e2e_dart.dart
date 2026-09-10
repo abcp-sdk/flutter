@@ -45,8 +45,12 @@ Future<void> main() async {
   // 8. listProviders / listModels / listPresets / listTools / getToolConfig
   final lp = await agent.listProviders(sdk.ListProvidersRequest());
   print('listProviders -> ${lp.providers.length}');
-  final lmd = await agent.listModels(sdk.ListModelsRequest());
-  print('listModels -> ${lmd.models.length}');
+  final firstProvider =
+      lp.providers.isNotEmpty ? lp.providers.first.providerId : '';
+  final lmd = firstProvider.isEmpty
+      ? null
+      : await agent.listModels(sdk.ListModelsRequest(providerId: firstProvider));
+  print('listModels($firstProvider) -> ${lmd?.models.length ?? 0}');
   final lpr = await agent.listPresets(sdk.ListPresetsRequest());
   print('listPresets -> ${lpr.presets.length}');
   final lt = await agent.listTools(sdk.ListToolsRequest());
