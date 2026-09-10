@@ -300,6 +300,7 @@ class AgentBindApi {
                   id: m.id,
                   name: m.name.isNotEmpty ? m.name : m.id,
                   contextLimit: m.contextLimit.toInt(),
+                  capability: m.capability.isEmpty ? 'text' : m.capability,
                 ))
             .toList(),
       );
@@ -320,6 +321,7 @@ class AgentBindApi {
                   id: m.id,
                   name: m.name,
                   contextLimit: fixnum.Int64(m.contextLimit ?? 0),
+                  capability: m.capability,
                 ))
             .toList(),
       ),

@@ -1178,6 +1178,7 @@ class _ToolsDetail extends StatefulWidget {
 class _ToolsDetailState extends State<_ToolsDetail> {
   List<ToolInfo> _tools = [];
   Map<String, dynamic> _config = {};
+  Map<String, ProviderInfo> _providers = {};
   String? _expanded;
   bool _loading = true;
   @override
@@ -1199,6 +1200,9 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     } catch (_) {}
     try {
       _config = await widget.api.toolConfig();
+    } catch (_) {}
+    try {
+      _providers = await widget.api.providers();
     } catch (_) {}
     setState(() => _loading = false);
   }
@@ -1358,12 +1362,37 @@ class _ToolsDetailState extends State<_ToolsDetail> {
   Widget _extConfigEditor(ToolInfo tool, ToolConfig c) {
     final extId = tool.category; // the owning extension id
     final current = _config[tool.name]?[c.name];
+    // Model-ref knobs (e.g. image_model / video_model / tts_model / vlm_model)
+    // render a provider/model dropdown over the agent's registered models,
+    // filtered to the capability the knob names. Everything else stays text.
+    final capability = _capabilityFor(c.name);
+    if (capability != null) {
+      return _GenerativeModelPicker(
+        label: c.name,
+        description: c.description,
+        capability: capability,
+        providers: _providers,
+        initialValue: current == null ? '' : '$current',
+        onSave: (v) => _saveExtConfig(extId, c.name, v),
+      );
+    }
     return _ConfigTextField(
       label: c.name,
       description: c.description,
       initialValue: current == null ? '' : '$current',
       onSave: (v) => _saveExtConfig(extId, c.name, v),
     );
+  }
+
+  /// Map a config knob name to the model capability it selects, or null when
+  /// the knob is not a generation-model reference.
+  static String? _capabilityFor(String knob) {
+    final k = knob.toLowerCase();
+    if (k == 'vlm_model') return 'text'; // vision = a text model w/ image input
+    if (k == 'image_model' || k == 'image_edit_model') return 'image';
+    if (k == 'video_model') return 'video';
+    if (k == 'tts_model') return 'speech';
+    return null;
   }
 
   Future<void> _saveExtConfig(String extId, String name, Object? value) async {
@@ -1389,6 +1418,104 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     }
   }
 
+}
+
+/// Provider/model dropdown for a generation-model config knob. Lists only
+/// models whose registered [capability] matches the knob; the saved value is
+/// a canonical `provider_id/model_id` reference, echoed back when set.
+class _GenerativeModelPicker extends StatefulWidget {
+  final String label;
+  final String description;
+  final String capability;
+  final Map<String, ProviderInfo> providers;
+  final String initialValue;
+  final ValueChanged<String> onSave;
+  const _GenerativeModelPicker({
+    required this.label,
+    required this.description,
+    required this.capability,
+    required this.providers,
+    required this.onSave,
+    this.initialValue = '',
+  });
+
+  @override
+  State<_GenerativeModelPicker> createState() => _GenerativeModelPickerState();
+}
+
+class _GenerativeModelPickerState extends State<_GenerativeModelPicker> {
+  late String _selected = widget.initialValue;
+
+  @override
+  void didUpdateWidget(covariant _GenerativeModelPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != oldWidget.initialValue) {
+      _selected = widget.initialValue;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = textOf(context);
+    final colors = colorsOf(context);
+    // Flatten registered models of the matching capability into
+    // `provider_id/model_id` refs.
+    final refs = <(String, String)>[]; // (ref, modelName)
+    for (final p in widget.providers.values) {
+      for (final m in p.models) {
+        final cap = m.capability.isEmpty ? 'text' : m.capability;
+        if (cap != widget.capability) continue;
+        refs.add(('${p.providerId}/${m.id}', m.name));
+      }
+    }
+    final valid = refs.any((r) => r.$1 == _selected) || _selected.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.description.isNotEmpty)
+            Text(widget.description,
+                style: text.micro.copyWith(color: colors.mutedForeground)),
+          DropdownButtonFormField<String>(
+            // An unknown stored ref (provider deleted) still shows, so the
+            // user sees the stale value instead of a silent reset.
+            initialValue: valid ? (_selected.isEmpty ? null : _selected) : _selected,
+            decoration: InputDecoration(
+              labelText: widget.label,
+              prefixIcon: _selected.isEmpty
+                  ? null
+                  : Icon(Icons.check_circle_rounded,
+                      size: 18, color: colors.success),
+            ),
+            items: [
+              DropdownMenuItem(value: '', child: Text(context.l10n.none)),
+              for (final (ref, name) in refs)
+                DropdownMenuItem(
+                    value: ref, child: Text(name == ref ? ref : '$name —— $ref')),
+            ],
+            onChanged: (v) => setState(() => _selected = v ?? ''),
+          ),
+          if (refs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(context.l10n.selectProviderFirst,
+                  style: text.micro.copyWith(color: colors.mutedForeground)),
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonal(
+              onPressed: _selected.isEmpty
+                  ? null
+                  : () => widget.onSave(_selected),
+              child: Text(context.l10n.save),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// A labelled config text field with an explicit Save button. [initialValue]

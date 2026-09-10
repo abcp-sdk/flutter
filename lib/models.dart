@@ -819,23 +819,28 @@ class ToolParam {
 class ProviderModel {
   final String id;
   final String name;
-  /// Model context window (tokens). REQUIRED: it drives compaction budgets
-  /// and is never inferred from an external catalog.
+  /// Model context window (tokens). REQUIRED for text models (drives
+  /// compaction budgets); generation models (image/video/speech) omit it.
   final int? contextLimit;
+  /// What the model generates: text (default) | image | video | speech.
+  final String capability;
   ProviderModel({
     required this.id,
     required this.name,
     this.contextLimit,
+    this.capability = 'text',
   });
   factory ProviderModel.fromJson(Map<String, dynamic> j) => ProviderModel(
         id: j['id'] as String? ?? '',
         name: j['name'] as String? ?? '',
         contextLimit: j['context_limit'] as int?,
+        capability: j['capability'] as String? ?? 'text',
       );
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         if (contextLimit != null) 'context_limit': contextLimit,
+        if (capability != 'text') 'capability': capability,
       };
 }
 
