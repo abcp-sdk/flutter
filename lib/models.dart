@@ -25,7 +25,10 @@ class Session {
   final String org;
   final String repo;
   final String branch;
+  /// Canonical model reference "provider_id/model_id".
   final String model;
+  /// Selected reasoning variant id (empty = provider defaults).
+  final String variant;
   final String preset;
   final String? tipId;
   final int? maxTurns;
@@ -48,6 +51,7 @@ class Session {
     this.repo = '',
     this.branch = '',
     this.model = '',
+    this.variant = '',
     this.preset = '',
     this.tipId,
     this.maxTurns,
@@ -71,6 +75,7 @@ class Session {
         repo: j['repo'] as String? ?? '',
         branch: j['branch'] as String? ?? '',
         model: j['model'] as String? ?? '',
+        variant: j['variant'] as String? ?? '',
         preset: j['preset'] as String? ?? '',
         locale: j['locale'] as String?,
         tipId: j['tip_id'] as String?,
@@ -93,6 +98,7 @@ class Session {
 
   Session copyWith({
     String? model,
+    String? variant,
     String? preset,
     int? maxTurns,
     String? systemPrompt,
@@ -104,6 +110,7 @@ class Session {
         repo: repo,
         branch: branch,
         model: model ?? this.model,
+        variant: variant ?? this.variant,
         preset: preset ?? this.preset,
         tipId: tipId,
         maxTurns: maxTurns ?? this.maxTurns,
@@ -875,6 +882,22 @@ class ProviderInfo {
       };
 }
 
+class ModelVariantInfo {
+  final String id;
+  final String name;
+  final String description;
+  ModelVariantInfo({
+    required this.id,
+    this.name = '',
+    this.description = '',
+  });
+  factory ModelVariantInfo.fromJson(Map<String, dynamic> j) => ModelVariantInfo(
+        id: j['id'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        description: j['description'] as String? ?? '',
+      );
+}
+
 class ModelInfo {
   final String id;
   final String name;
@@ -883,6 +906,8 @@ class ModelInfo {
   final int? outputLimit;
   final bool reasoning;
   final bool toolCall;
+  /// Selectable reasoning variants (models.dev catalog).
+  final List<ModelVariantInfo> variants;
   ModelInfo({
     required this.id,
     required this.name,
@@ -891,6 +916,7 @@ class ModelInfo {
     this.outputLimit,
     this.reasoning = false,
     this.toolCall = false,
+    this.variants = const [],
   });
   factory ModelInfo.fromJson(Map<String, dynamic> j) => ModelInfo(
         id: j['id'] as String? ?? '',
@@ -900,6 +926,10 @@ class ModelInfo {
         outputLimit: j['output_limit'] as int?,
         reasoning: j['reasoning'] as bool? ?? false,
         toolCall: j['tool_call'] as bool? ?? false,
+        variants: (j['variants'] as List? ?? [])
+            .map((e) =>
+                ModelVariantInfo.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 

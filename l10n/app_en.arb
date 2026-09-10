@@ -87,6 +87,8 @@
   "you": "me",
   "settingsTitle": "Session Settings",
   "modelLabel": "Model",
+  "variantLabel": "Reasoning variant",
+  "variantNone": "Default (no variant)",
   "presetLabel": "Preset",
   "maxTurnsLabel": "Max Turns",
   "sysPromptLabel": "System Prompt (blank = inherit)",

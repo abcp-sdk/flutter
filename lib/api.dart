@@ -89,6 +89,7 @@ class AgentBindApi {
     final r = await _agent.createSession(sdk.CreateSessionRequest(
       name: (params['name'] as String?) ?? '',
       model: (params['model'] as String?) ?? '',
+      variant: (params['variant'] as String?) ?? '',
       preset: (params['preset'] as String?) ?? '',
       org: (params['org'] as String?) ?? '',
       repo: (params['repo'] as String?) ?? '',
@@ -97,6 +98,7 @@ class AgentBindApi {
     return Session(
       id: r.sessionName,
       model: (params['model'] as String?) ?? '',
+      variant: (params['variant'] as String?) ?? '',
       org: (params['org'] as String?) ?? '',
       repo: (params['repo'] as String?) ?? '',
       branch: (params['branch'] as String?) ?? '',
@@ -156,8 +158,10 @@ class AgentBindApi {
     return (msgs, msgs.length >= limit);
   }
 
-  Future<String> switchModel(String id, String model) async {
-    await _agent.setModel(sdk.SetModelRequest(id: id, model: model));
+  Future<String> switchModel(String id, String model,
+      {String variant = ''}) async {
+    await _agent.setModel(
+        sdk.SetModelRequest(id: id, model: model, variant: variant));
     return model;
   }
 
@@ -169,6 +173,7 @@ class AgentBindApi {
       maxTurns: (settings['max_turns'] as int?) ?? 0,
       systemPrompt: (settings['system_prompt'] as String?) ?? '',
       locale: (settings['locale'] as String?) ?? '',
+      variant: (settings['variant'] as String?) ?? '',
     ));
     return _sessionFromSessionResults(r.session);
   }
@@ -290,7 +295,15 @@ class AgentBindApi {
     final r = await _agent
         .listModels(sdk.ListModelsRequest(providerId: providerId));
     return r.models
-        .map((m) => ModelInfo(id: m.id, name: m.name, providerId: providerId))
+        .map((m) => ModelInfo(
+              id: m.id,
+              name: m.name,
+              providerId: providerId,
+              variants: m.variants
+                  .map((v) => ModelVariantInfo(
+                      id: v.id, name: v.name, description: v.description))
+                  .toList(),
+            ))
         .toList();
   }
 
@@ -367,6 +380,7 @@ Session sessionFromPb(sdk.Session s) => Session(
       repo: s.repo,
       branch: s.branch,
       model: s.model,
+      variant: s.variant,
       preset: s.preset,
       tipId: s.tipId.isEmpty ? null : s.tipId,
       maxTurns: s.maxTurns == 0 ? null : s.maxTurns,

@@ -87,6 +87,8 @@
   "you": "我",
   "settingsTitle": "会话设置",
   "modelLabel": "模型",
+  "variantLabel": "推理档位",
+  "variantNone": "默认（不指定档位）",
   "presetLabel": "预设",
   "maxTurnsLabel": "最大轮数",
   "sysPromptLabel": "系统提示（留空继承）",

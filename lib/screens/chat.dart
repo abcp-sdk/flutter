@@ -599,10 +599,19 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   void _showSettings() {
     final sid = store.activeSessionId;
     if (sid == null) return;
-    // Hold the editable model/preset/locale OUTSIDE the StatefulBuilder so a
-    // rebuild (e.g. tapping a dropdown) does NOT re-seed them from the store
-    // and discard the user's in-progress selection.
-    String model = store.activeSession?.model ?? '';
+    // Hold the editable model/variant/preset/locale OUTSIDE the StatefulBuilder
+    // so a rebuild (e.g. tapping a dropdown) does NOT re-seed them from the
+    // store and discard the user's in-progress selection.
+    //
+    // The session model is a canonical "provider_id/model_id" reference (a
+    // bare model id is never resolved by flat lookup). Split it so the
+    // provider dropdown pre-selects the owner.
+    final currentModel = store.activeSession?.model ?? '';
+    final slash = currentModel.indexOf('/');
+    String provider =
+        slash > 0 ? currentModel.substring(0, slash) : '';
+    String model = slash > 0 ? currentModel.substring(slash + 1) : currentModel;
+    String variant = store.activeSession?.variant ?? '';
     String preset = store.activeSession?.preset ?? '';
     String locale = store.activeSession?.locale ?? '';
     // Cascading provider → model. provider_id is REQUIRED by the agent (a
@@ -610,16 +619,15 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // option: pick the owner of the session's current model (else the first
     // registered provider), then load only that provider's models.
     final providerIds = _providers.keys.toList();
-    String provider = '';
-    for (final id in providerIds) {
-      if (_providers[id]!.models.any((m) => m.id == model)) {
-        provider = id;
-        break;
-      }
-    }
     if (provider.isEmpty && providerIds.isNotEmpty) provider = providerIds.first;
     List<ModelInfo> modelsForProvider = [];
+    List<ModelVariantInfo> variantsForModel = [];
     bool loadingModels = true;
+    void syncVariants() {
+      final sel = modelsForProvider.where((m) => m.id == model);
+      variantsForModel = sel.isEmpty ? const [] : sel.first.variants;
+      if (!variantsForModel.any((v) => v.id == variant)) variant = '';
+    }
     Future<void> loadModels(
       void Function(void Function()) setState,
     ) async {
@@ -633,6 +641,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
           if (!list.any((m) => m.id == model)) {
             model = list.isNotEmpty ? list.first.id : model;
           }
+          syncVariants();
         });
       } catch (_) {
         if (mounted) setState(() => loadingModels = false);
@@ -704,10 +713,32 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                           !modelsForProvider.any((m) => m.id == model))
                         DropdownMenuItem(value: model, child: Text(model)),
                     ],
-                    onChanged: (v) => setState(() => model = v ?? ''),
+                    onChanged: (v) => setState(() {
+                      model = v ?? '';
+                      syncVariants();
+                    }),
                     decoration: InputDecoration(labelText: ctx.l10n.modelLabel),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  // Reasoning variant (only when the model advertises any).
+                  if (variantsForModel.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: variant.isEmpty ? '' : variant,
+                      items: [
+                        DropdownMenuItem(
+                            value: '', child: Text(ctx.l10n.variantNone)),
+                        for (final v in variantsForModel)
+                          DropdownMenuItem(
+                              value: v.id,
+                              child: Text(
+                                  v.name.isNotEmpty ? v.name : v.id)),
+                      ],
+                      onChanged: (v) => setState(() => variant = v ?? ''),
+                      decoration:
+                          InputDecoration(labelText: ctx.l10n.variantLabel),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   DropdownButtonFormField<String>(
                     initialValue: preset.isEmpty ? null : preset,
                     items: [
@@ -754,7 +785,13 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 onPressed: () async {
                   Navigator.pop(ctx);
                   final updates = <String, dynamic>{};
-                  if (model.isNotEmpty) updates['model'] = model;
+                  // Model is stored as a canonical provider/model reference.
+                  if (model.isNotEmpty) {
+                    updates['model'] = provider.isEmpty
+                        ? model
+                        : '$provider/$model';
+                  }
+                  updates['variant'] = variant;
                   if (preset.isNotEmpty) updates['preset'] = preset;
                   // Only send the per-session locale when explicitly chosen;
                   // '' (follow) is sent as empty to clear any override.

@@ -230,6 +230,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelLabel => '模型';
 
   @override
+  String get variantLabel => '推理档位';
+
+  @override
+  String get variantNone => '默认（不指定档位）';
+
+  @override
   String get presetLabel => '预设';
 
   @override

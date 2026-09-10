@@ -230,6 +230,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelLabel => 'Model';
 
   @override
+  String get variantLabel => 'Reasoning variant';
+
+  @override
+  String get variantNone => 'Default (no variant)';
+
+  @override
   String get presetLabel => 'Preset';
 
   @override

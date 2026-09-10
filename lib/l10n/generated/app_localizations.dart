@@ -530,6 +530,18 @@ abstract class AppLocalizations {
   /// **'模型'**
   String get modelLabel;
 
+  /// No description provided for @variantLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'推理档位'**
+  String get variantLabel;
+
+  /// No description provided for @variantNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认（不指定档位）'**
+  String get variantNone;
+
   /// No description provided for @presetLabel.
   ///
   /// In zh, this message translates to:
