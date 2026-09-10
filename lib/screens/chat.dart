@@ -412,6 +412,13 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     );
   }
 
+  /// The model id half of a canonical "provider_id/model_id" reference (the
+  /// provider is implied by the session settings and is not shown here).
+  static String _shortModel(String ref) {
+    final slash = ref.indexOf('/');
+    return slash > 0 ? ref.substring(slash + 1) : ref;
+  }
+
   Widget _topBar(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
@@ -439,39 +446,53 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
+              // Title + model/preset chip share the space; the popup-menu
+              // button is a fixed child so it can never be pushed off-screen.
               Expanded(
-                child: Text(
-                  s != null
-                      ? '${s.org}/${s.repo}'
-                          '${s.branch.isNotEmpty ? '/${s.branch}' : ''}'
-                      : context.l10n.chatTitle,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.meta.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colors.mutedForeground),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        s != null && (s.org.isNotEmpty || s.repo.isNotEmpty)
+                            ? '${s.org}/${s.repo}'
+                                '${s.branch.isNotEmpty ? '/${s.branch}' : ''}'
+                            : context.l10n.chatTitle,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.meta.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colors.mutedForeground),
+                      ),
+                    ),
+                    // Current model / preset — visible feedback that session
+                    // settings applied. The model is a canonical
+                    // "provider_id/model_id" ref; only the model id half is
+                    // shown (the provider is implied by settings).
+                    if (s != null && (s.model.isNotEmpty || s.preset.isNotEmpty)) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: colors.muted.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            [
+                              if (s.model.isNotEmpty) _shortModel(s.model),
+                              if (s.preset.isNotEmpty) s.preset,
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.micro.copyWith(
+                                color: colors.mutedForeground, fontSize: 10),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              // Current model / preset — visible feedback that session
-              // settings applied (the picker also re-seeds these next open).
-              if (s != null && (s.model.isNotEmpty || s.preset.isNotEmpty))
-                Container(
-                  margin: const EdgeInsets.only(right: AppSpacing.xs),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    [
-                      if (s.model.isNotEmpty) s.model,
-                      if (s.preset.isNotEmpty) s.preset,
-                    ].join(' · '),
-                    overflow: TextOverflow.ellipsis,
-                    style: text.micro.copyWith(
-                        color: colors.mutedForeground, fontSize: 10),
-                  ),
-                ),
               PopupMenuButton<String>(
                 onSelected: (v) => _menuAction(v),
                 itemBuilder: (context) => [
