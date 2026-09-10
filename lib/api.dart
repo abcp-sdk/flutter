@@ -439,6 +439,12 @@ Message messageFromPb(sdk.Message m) {
           type: 'text',
           text: (d['text'] as String?) ?? '',
         ));
+      case 'reasoning':
+        parts.add(MessagePart(
+          id: p.id,
+          type: 'reasoning',
+          text: (d['text'] as String?) ?? '',
+        ));
       case 'summary':
       case 'compaction':
         parts.add(MessagePart(

@@ -444,9 +444,30 @@ class MessageBubble extends StatelessWidget {
                 color: colors.destructive, fontWeight: FontWeight.w600)),
       );
     }
-    // No bubble yet: while the assistant is streaming but nothing has arrived
-    // (no text/tool part), render nothing instead of an empty "air bubble".
-    if (isStreaming && parts.isEmpty) return const SizedBox.shrink();
+    // While the assistant is streaming but NOTHING has arrived yet, show a
+    // "thinking…" indicator (it disappears the instant the first part —
+    // reasoning, text or a tool call — lands, which is rendered normally).
+    if (isStreaming && parts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm + 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colors.mutedForeground,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(context.l10n.thinking,
+                style: text.micro.copyWith(color: colors.mutedForeground)),
+          ],
+        ),
+      );
+    }
 
     Widget bubble = Container(
       padding: const EdgeInsets.symmetric(
