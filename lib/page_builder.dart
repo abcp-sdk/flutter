@@ -56,8 +56,12 @@ Widget buildPage(
       return ProvidersListScreen(key: ValueKey(page.key), store: store);
     case ProviderFormPage():
       return ProviderFormScreen(key: ValueKey(page.key), store: store);
-    case ProviderModelsPage():
-      return ProviderModelsScreen(key: ValueKey(page.key), store: store);
+    case ProviderModelsPage(:final modelId):
+      return ProviderModelScreen(
+        key: ValueKey(page.key),
+        store: store,
+        modelId: modelId,
+      );
   }
 }
 

@@ -233,7 +233,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
 }
 
 AppTypography textOf(BuildContext context) =>
-    Theme.of(context).extension<AppTypography>() ?? AppTypography.of(Brightness.dark);
+    Theme.of(context).extension<AppTypography>() ??
+    AppTypography.of(Brightness.dark);
 
 /// Builds the MaterialApp themes from the shared tokens.
 ThemeData buildAppTheme(Brightness brightness) {
@@ -244,6 +245,12 @@ ThemeData buildAppTheme(Brightness brightness) {
     onPrimary: c.onPrimary,
     secondary: c.accent,
     onSecondary: c.onPrimary,
+    // Tonal buttons (IconButton.filledTonal / FilledButton.tonal) fill with
+    // `secondaryContainer`. Left unset, Flutter derives a tonal tint of the
+    // secondary/primary (a yellow-peach in this palette) — pin it to the
+    // neutral muted surface so "+"/secondary actions have no colored fill.
+    secondaryContainer: c.muted,
+    onSecondaryContainer: c.foreground,
     error: c.destructive,
     onError: brightness == Brightness.dark
         ? AppColors.dark.background
@@ -297,13 +304,19 @@ ThemeData buildAppTheme(Brightness brightness) {
         side: BorderSide(color: c.border.withValues(alpha: 0.6)),
       ),
     ),
-    dividerTheme: DividerThemeData(color: c.border.withValues(alpha: 0.5), thickness: 1, space: 1),
+    dividerTheme: DividerThemeData(
+      color: c.border.withValues(alpha: 0.5),
+      thickness: 1,
+      space: 1,
+    ),
     inputDecorationTheme: InputDecorationTheme(
       isDense: true,
       filled: true,
       fillColor: c.muted,
       contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
       border: OutlineInputBorder(
         borderRadius: AppRadius.rMd,
         borderSide: BorderSide(color: c.border),
@@ -325,7 +338,9 @@ ThemeData buildAppTheme(Brightness brightness) {
         foregroundColor: c.onPrimary,
         textStyle: ty.meta.copyWith(fontWeight: FontWeight.w600),
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.rMd),
       ),
     ),
@@ -335,7 +350,9 @@ ThemeData buildAppTheme(Brightness brightness) {
         side: BorderSide(color: c.border),
         textStyle: ty.meta,
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.rMd),
       ),
     ),
@@ -344,7 +361,9 @@ ThemeData buildAppTheme(Brightness brightness) {
         foregroundColor: c.primary,
         textStyle: ty.meta,
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
         minimumSize: const Size(0, 0),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -365,7 +384,10 @@ ThemeData buildAppTheme(Brightness brightness) {
       backgroundColor: c.muted,
       side: BorderSide.none,
       labelStyle: ty.micro,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     ),
     snackBarTheme: SnackBarThemeData(
@@ -390,7 +412,9 @@ ThemeData buildAppTheme(Brightness brightness) {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected) ? c.onPrimary : c.mutedForeground,
+        (states) => states.contains(WidgetState.selected)
+            ? c.onPrimary
+            : c.mutedForeground,
       ),
       trackColor: WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.selected) ? c.primary : c.input,

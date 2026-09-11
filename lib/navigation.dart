@@ -55,9 +55,13 @@ class ProviderFormPage extends AppPage {
   const ProviderFormPage() : super('provider_form');
 }
 
-/// Config tab — add a model to the provider draft being edited.
+/// Config tab — a single model entry form. [modelId] selects the model being
+/// edited, or null for a brand-new model. Used both for adding a model to the
+/// provider draft and for tapping an existing model row to edit it.
 class ProviderModelsPage extends AppPage {
-  const ProviderModelsPage() : super('provider_models');
+  final String? modelId;
+  ProviderModelsPage({this.modelId})
+    : super('provider_model_${modelId ?? 'new'}');
 }
 
 /// The stack-bottom page for a given tab.

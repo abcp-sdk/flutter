@@ -428,11 +428,11 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
                   ),
                 ),
               ),
-              IconButton.filledTonal(
+              IconButton(
                 tooltip: context.l10n.addModel,
-                icon: const Icon(Icons.add_rounded, size: 18),
+                icon: Icon(Icons.add_rounded, size: 20, color: colors.primary),
                 onPressed: () {
-                  store.pushPage(const ProviderModelsPage());
+                  store.pushPage(ProviderModelsPage());
                 },
               ),
             ],
@@ -448,6 +448,7 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
           for (final m in d.models)
             _ModelRow(
               model: m,
+              onTap: () => store.pushPage(ProviderModelsPage(modelId: m.id)),
               onRemove: () => setState(() => d.models.remove(m)),
             ),
         ],
@@ -469,11 +470,17 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
   }
 }
 
-/// A compact, read-only model row in the provider form (removable).
+/// A compact, tappable model row in the provider form. Tapping opens the
+/// model's own form page; the × removes it from the draft.
 class _ModelRow extends StatelessWidget {
   final ProviderModel model;
+  final VoidCallback onTap;
   final VoidCallback onRemove;
-  const _ModelRow({required this.model, required this.onRemove});
+  const _ModelRow({
+    required this.model,
+    required this.onTap,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -482,73 +489,110 @@ class _ModelRow extends StatelessWidget {
     final isText = model.capability.isEmpty || model.capability == 'text';
     return Container(
       margin: const EdgeInsets.only(top: AppSpacing.xs),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.4),
         borderRadius: AppRadius.rSm,
         border: Border.all(color: colors.border.withValues(alpha: 0.6)),
       ),
-      child: Row(
-        children: [
-          capabilityIcon(context, model.capability),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              model.id,
-              overflow: TextOverflow.ellipsis,
-              style: text.mono.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+      child: InkWell(
+        borderRadius: AppRadius.rSm,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.only(
+            left: AppSpacing.md,
+            top: AppSpacing.xs,
+            bottom: AppSpacing.xs,
+            right: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              capabilityIcon(context, model.capability),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  model.id,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.mono.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
+              Text(
+                isText
+                    ? '${capabilityLabel(context, model.capability)} · ${model.contextLimit ?? 0}'
+                    : capabilityLabel(context, model.capability),
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close_rounded, size: 16),
+                tooltip: context.l10n.delete,
+                onPressed: onRemove,
+              ),
+            ],
           ),
-          Text(
-            isText
-                ? '${capabilityLabel(context, model.capability)} · ${model.contextLimit ?? 0}'
-                : capabilityLabel(context, model.capability),
-            style: text.micro.copyWith(color: colors.mutedForeground),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.close_rounded, size: 16),
-            tooltip: context.l10n.delete,
-            onPressed: onRemove,
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Model form page — pick a capability + a model id (manual), or browse the
-// models.dev catalog. Added models land on the provider draft's model list.
+// Model form page — a SINGLE model's form (its own capability, id, context and
+// test). Opened with `modelId == null` to add a new model, or with an existing
+// id to edit that model in place. Writes straight onto the provider draft.
 // ---------------------------------------------------------------------------
-class ProviderModelsScreen extends StatefulWidget {
+class ProviderModelScreen extends StatefulWidget {
   final AppStore store;
-  const ProviderModelsScreen({super.key, required this.store});
+
+  /// Null = adding a new model; otherwise the id of the model being edited.
+  final String? modelId;
+  const ProviderModelScreen({super.key, required this.store, this.modelId});
 
   @override
-  State<ProviderModelsScreen> createState() => _ProviderModelsScreenState();
+  State<ProviderModelScreen> createState() => _ProviderModelScreenState();
 }
 
-class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
+class _ProviderModelScreenState extends State<ProviderModelScreen> {
   AppStore get store => widget.store;
 
-  final _modelIdCtrl = TextEditingController();
-  final _modelCtxCtrl = TextEditingController();
-  String _capability = 'text';
+  late final TextEditingController _modelIdCtrl;
+  late final TextEditingController _modelCtxCtrl;
+  late String _capability;
+  late String _name;
 
+  // Catalog picker (fills the id/name/context fields).
   MdProvider? _template;
   String _modelQuery = '';
   String _catalogCapability = 'text';
 
+  // Per-model test state.
+  bool _testing = false;
+  bool? _testOk;
+  String? _testMsg;
+
+  bool get _isEdit => widget.modelId != null;
+
+  ProviderModel? _existing() {
+    final d = store.providerDraft;
+    if (d == null || widget.modelId == null) return null;
+    for (final m in d.models) {
+      if (m.id == widget.modelId) return m;
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
+    final m = _existing();
+    _modelIdCtrl = TextEditingController(text: m?.id ?? '');
+    _modelCtxCtrl = TextEditingController(
+      text: (m?.contextLimit ?? 0) > 0 ? '${m!.contextLimit}' : '',
+    );
+    _capability = (m?.capability.isNotEmpty ?? false) ? m!.capability : 'text';
+    _name = m?.name ?? '';
     store.addListener(_onStore);
   }
 
@@ -564,15 +608,11 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
     if (mounted) setState(() {});
   }
 
-  void _addManual() {
+  void _save() {
     final d = store.providerDraft;
     if (d == null) return;
     final mid = _modelIdCtrl.text.trim();
     if (mid.isEmpty) return;
-    if (d.models.any((m) => m.id == mid)) {
-      store.popPage();
-      return;
-    }
     final isText = _capability == 'text';
     final ctx = int.tryParse(_modelCtxCtrl.text.trim());
     if (isText && (ctx == null || ctx <= 0)) {
@@ -581,10 +621,15 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
       );
       return;
     }
+    // Editing: drop the old entry if the id changed (so a rename replaces).
+    if (_isEdit) {
+      d.models.removeWhere((m) => m.id == widget.modelId);
+    }
+    d.models.removeWhere((m) => m.id == mid);
     d.models.add(
       ProviderModel(
         id: mid,
-        name: mid,
+        name: _name.isNotEmpty ? _name : mid,
         contextLimit: isText ? ctx : null,
         capability: _capability,
       ),
@@ -592,20 +637,39 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
     store.popPage();
   }
 
-  void _addCatalog(MdModel m) {
+  Future<void> _test() async {
     final d = store.providerDraft;
     if (d == null) return;
-    if (d.models.any((x) => x.id == m.id)) return;
+    final mid = _modelIdCtrl.text.trim();
+    if (mid.isEmpty) return;
     setState(() {
-      d.models.add(
-        ProviderModel(
-          id: m.id,
-          name: m.name,
-          contextLimit: m.contextLimit,
-          capability: m.capability,
-        ),
-      );
+      _testing = true;
+      _testOk = null;
+      _testMsg = null;
     });
+    final r = await store.api.testProvider(
+      apiType: d.apiType,
+      baseUrl: d.baseUrl,
+      apiKey: d.apiKey,
+      model: '${d.id}/$mid',
+      capability: _capability,
+    );
+    if (!mounted) return;
+    final ok = r['ok'] == true;
+    setState(() {
+      _testing = false;
+      _testOk = ok;
+      _testMsg = ok
+          ? context.l10n.testModelOk('${r['result'] ?? ''}')
+          : '${r['result'] ?? 'Failed'}';
+    });
+  }
+
+  void _remove() {
+    final d = store.providerDraft;
+    if (d == null) return;
+    d.models.removeWhere((m) => m.id == widget.modelId);
+    store.popPage();
   }
 
   Future<void> _pickTemplate() async {
@@ -616,7 +680,21 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
       builder: (_) => const _TemplatePickerSheet(),
     );
     if (picked == null) return;
-    setState(() => _template = picked);
+    setState(() {
+      _template = picked;
+      _catalogCapability = 'text';
+    });
+  }
+
+  void _applyCatalog(MdModel m) {
+    setState(() {
+      _modelIdCtrl.text = m.id;
+      _name = m.name.isNotEmpty ? m.name : m.id;
+      _capability = m.capability;
+      if ((m.contextLimit ?? 0) > 0) {
+        _modelCtxCtrl.text = '${m.contextLimit}';
+      }
+    });
   }
 
   @override
@@ -627,6 +705,7 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
     if (d == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    final isText = _capability == 'text';
     final templateModels = _template?.models ?? <MdModel>[];
     final filtered = templateModels
         .where(
@@ -646,12 +725,31 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => store.popPage(),
         ),
-        title: Text(context.l10n.addModel),
+        title: Text(_isEdit ? context.l10n.modelLabel : context.l10n.addModel),
+        actions: [
+          if (_isEdit)
+            IconButton(
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                color: colors.destructive,
+              ),
+              tooltip: context.l10n.delete,
+              onPressed: _remove,
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
           // Capability selector (decides the model's generation modality).
+          Text(
+            context.l10n.modelLabel,
+            style: text.meta.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
           SegmentedButton<String>(
             segments: [
               for (final c in kModelCapabilities)
@@ -669,40 +767,67 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: _modelIdCtrl,
-                  decoration: InputDecoration(
-                    labelText: context.l10n.modelIdLabel,
+          TextField(
+            controller: _modelIdCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(labelText: context.l10n.modelIdLabel),
+          ),
+          if (isText) ...[
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _modelCtxCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: context.l10n.contextLengthLabel,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          // Test (text models only — generation models have no test path).
+          if (isText)
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _testing || _modelIdCtrl.text.trim().isEmpty
+                      ? null
+                      : _test,
+                  icon: _testing
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _testOk == true
+                              ? Icons.check_circle_rounded
+                              : Icons.science_outlined,
+                          size: 16,
+                          color: _testOk == true ? colors.success : null,
+                        ),
+                  label: Text(
+                    _testing
+                        ? context.l10n.testing
+                        : (_testOk == true
+                              ? context.l10n.taskDone
+                              : context.l10n.test),
                   ),
+                ),
+              ],
+            ),
+          if (_testMsg != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                _testMsg!,
+                style: text.micro.copyWith(
+                  color: _testOk == true ? colors.success : colors.destructive,
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              if (_capability == 'text')
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _modelCtxCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.contextLengthLabel,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          FilledButton.tonalIcon(
-            onPressed: _addManual,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: Text(context.l10n.add),
-          ),
+            ),
+
           const Divider(height: AppSpacing.xl),
           // Catalog browser (optional): pick a models.dev provider, filter by
-          // capability, tap a chip to add it.
+          // capability, tap a chip to fill the form.
           OutlinedButton.icon(
             onPressed: _pickTemplate,
             icon: const Icon(Icons.auto_awesome_outlined, size: 16),
@@ -752,9 +877,7 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
                       style: text.micro,
                     ),
                     avatar: capabilityIcon(context, m.capability, size: 13),
-                    onPressed: d.models.any((x) => x.id == m.id)
-                        ? null
-                        : () => _addCatalog(m),
+                    onPressed: () => _applyCatalog(m),
                   ),
                 if (filtered.isEmpty)
                   Text(
@@ -764,23 +887,16 @@ class _ProviderModelsScreenState extends State<ProviderModelsScreen> {
               ],
             ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          // The draft's current models, so the user sees what they added.
-          if (d.models.isNotEmpty) ...[
-            Text(
-              context.l10n.modelsLabel,
-              style: text.meta.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-            for (final m in d.models)
-              _ModelRow(
-                model: m,
-                onRemove: () => setState(() => d.models.remove(m)),
-              ),
-          ],
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: FilledButton(
+            onPressed: _modelIdCtrl.text.trim().isEmpty ? null : _save,
+            child: Text(context.l10n.save),
+          ),
+        ),
       ),
     );
   }
