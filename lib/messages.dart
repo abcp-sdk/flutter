@@ -318,7 +318,8 @@ class MessagesController extends ChangeNotifier {
             changeId: params['change_id'] as String?,
             diff: params['diff'] as String?,
             additions: params['additions'] as int?,
-            deletions: params['deletions'] as int?);
+            deletions: params['deletions'] as int?,
+            data: (params['data'] as Map?)?.cast<String, dynamic>());
         break;
       case 'tool-error':
         final tcId = (params['toolCallId'] ?? params['id']) as String?;
@@ -441,7 +442,7 @@ class MessagesController extends ChangeNotifier {
   }
 
   void _updateToolResult(String partId, Object? result,
-      {String? errorMsg, String? changeId, String? diff, int? additions, int? deletions}) {
+      {String? errorMsg, String? changeId, String? diff, int? additions, int? deletions, Map<String, dynamic>? data}) {
     final sid = _streamingId;
     if (sid == null) return;
     final idx = messages.indexWhere((m) => m.id == sid);
@@ -462,6 +463,7 @@ class MessagesController extends ChangeNotifier {
           error: errorMsg ?? old.error,
           input: old.input,
           output: output ?? old.output,
+          data: data ?? old.data,
           changeId: changeId ?? old.changeId,
           diff: diff ?? old.diff,
           additions: additions ?? old.additions,

@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../api.dart';
 import '../i18n.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'media_attachment.dart';
 import 'tool_icon.dart';
 
 /// Recreates ToolPartView.svelte: a uniform tool-result card with three
@@ -17,10 +19,12 @@ import 'tool_icon.dart';
 class ToolPartView extends StatefulWidget {
   final ChatPart part;
   final bool isStreaming;
+  final AgentBindApi? api;
   const ToolPartView({
     super.key,
     required this.part,
     this.isStreaming = false,
+    this.api,
   });
 
   @override
@@ -28,6 +32,38 @@ class ToolPartView extends StatefulWidget {
 }
 
 class _ToolPartViewState extends State<ToolPartView> {
+  AgentBindApi? get _api => widget.api;
+
+  /// Fixed media fields in a tool result's `data`: `images`/`videos`/`audio`
+  /// (each `{code, mime, ...}`) render as media cards. This is the stable
+  /// contract the generation tools emit.
+  List<MediaRef> _mediaRefs(ChatPart part) {
+    final data = part.state?.data;
+    if (data == null) return const [];
+    final out = <MediaRef>[];
+    void collect(Object? v) {
+      if (v is Map) {
+        final code = v['code'];
+        if (code is String && code.isNotEmpty) {
+          out.add(MediaRef(
+            code: code,
+            mime: v['mime'] is String ? v['mime'] as String : null,
+            name: v['name'] is String ? v['name'] as String : null,
+          ));
+        }
+      }
+    }
+
+    for (final key in const ['images', 'videos', 'audio']) {
+      final v = data[key];
+      if (v is List) {
+        for (final e in v) collect(e);
+      } else {
+        collect(v);
+      }
+    }
+    return out;
+  }
   // Card-level fold + per-section folds (input / content / metadata).
   bool _open = true;
   bool _inputOpen = true;
@@ -150,12 +186,32 @@ class _ToolPartViewState extends State<ToolPartView> {
               icon: Icons.description_outlined,
               open: _contentOpen,
               onToggle: () => setState(() => _contentOpen = !_contentOpen),
-              child: _running
-                  ? Text(context.l10n.running,
-                      style: text.micro.copyWith(
-                          color: colors.mutedForeground,
-                          fontStyle: FontStyle.italic))
-                  : _MonoText(state?.output ?? ''),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_running)
+                    Text(context.l10n.running,
+                        style: text.micro.copyWith(
+                            color: colors.mutedForeground,
+                            fontStyle: FontStyle.italic))
+                  else if ((state?.output ?? '').isNotEmpty)
+                    _MonoText(state!.output!),
+                  // Fixed media fields from the tool result `data` (e.g.
+                  // images / videos / audio emitted by the generation tools)
+                  // render as first-class media, not text.
+                  for (final ref in _mediaRefs(part))
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: MediaCard(
+                        api: _api!,
+                        code: ref.code,
+                        name: ref.name,
+                        mime: ref.mime,
+                      ),
+                    ),
+                ],
+              ),
             ),
             if (_hasMeta)
               _Section(
@@ -380,4 +436,12 @@ class _Row extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A file reference emitted in a tool result's `data`.
+class MediaRef {
+  final String code;
+  final String? mime;
+  final String? name;
+  const MediaRef({required this.code, this.mime, this.name});
 }

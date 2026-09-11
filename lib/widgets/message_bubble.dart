@@ -5,250 +5,27 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../api.dart';
 import '../i18n.dart';
 import '../models.dart';
-import '../services/download_service.dart';
 import '../theme/app_theme.dart';
+import 'media_attachment.dart';
 import 'tool_part.dart';
 
-/// A structured attachment (own `file` part from `/messages` or the send
-/// flow). Images render an inline thumbnail (tap to view full) fetched with
-/// the auth header; other files render a card that saves to Downloads.
+/// A structured attachment (own `file` part from `/messages` or the send flow).
+/// Rendering is by media type (image / audio / video / pdf / text / other) via
+/// [MediaCard].
 class _FileAttachment extends StatelessWidget {
   final ChatPart part;
   final AgentBindApi api;
   const _FileAttachment({required this.part, required this.api});
 
-  /// Historical attachments were often stored without name/mime/size (only
-  /// `code`). Fall back to a HEAD probe of the file to learn its content type,
-  /// so images render as thumbnails and files show a sensible name/size.
-  Future<({String? mime, int size, String name})> _resolved() async {
-    final code = part.code ?? '';
-    final probe = await api.fileHead(code);
-    return (
-      mime: part.mime?.isNotEmpty == true ? part.mime : probe.contentType,
-      size: (part.size ?? 0) != 0 ? part.size! : probe.length,
-      name: part.name?.isNotEmpty == true ? part.name! : code,
-    );
-  }
-
-  bool _isImageMime(String? mime) => (mime ?? '').startsWith('image/');
-
-  Future<void> _open(BuildContext context, String mime) async {
-    final code = part.code ?? '';
-    if (code.isEmpty) return;
-    try {
-      if (_isImageMime(mime)) {
-        final bytes = await api.fetchFileBytes(code);
-        if (!context.mounted) return;
-        // ignore: use_build_context_synchronously
-        showDialog<void>(
-          context: context,
-          builder: (_) => Dialog(
-            insetPadding: const EdgeInsets.all(16),
-            child: InteractiveViewer(
-              child: Image.memory(Uint8List.fromList(bytes)),
-            ),
-          ),
-        );
-      } else {
-        final where = await DownloadService(api).download(
-          path: code,
-          displayName: part.name ?? code,
-          mimeType: mime,
-        );
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(context.l10n.savedToDownloads(where)),
-          duration: const Duration(seconds: 2),
-        ));
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(context.l10n.sendFailed('$e')),
-          duration: const Duration(seconds: 2)));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final colors = colorsOf(context);
-    final text = textOf(context);
-    return FutureBuilder<({String? mime, int size, String name})>(
-      future: _resolved(),
-      builder: (context, snap) {
-        final data = snap.data;
-        final name = data?.name ?? part.code ?? '';
-        final mime = data?.mime;
-        final size = data?.size ?? 0;
-        final sizeLabel = size > 0 ? _formatBytes(size) : '';
-        if (_isImageMime(mime)) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-            child: GestureDetector(
-              onTap: () => _open(context, mime ?? ''),
-              child: ClipRRect(
-                borderRadius: AppRadius.rMd,
-                child: SizedBox(
-                  width: 220,
-                  height: 140,
-                  child: _ImageToolImage(code: part.code!, api: api),
-                ),
-              ),
-            ),
-          );
-        }
-        return Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs + 2),
-          decoration: BoxDecoration(
-            color: colors.muted.withValues(alpha: 0.5),
-            borderRadius: AppRadius.rSm,
-            border: Border.all(color: colors.border.withValues(alpha: 0.6)),
-          ),
-          child: InkWell(
-            borderRadius: AppRadius.rSm,
-            onTap: () => _open(context, mime ?? ''),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.attach_file_rounded,
-                    size: 14, color: colors.mutedForeground),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(name,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.micro.copyWith(color: colors.foreground)),
-                ),
-                if (sizeLabel.isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Text(sizeLabel,
-                      style: text.micro.copyWith(color: colors.mutedForeground)),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
+    return MediaCard(
+      api: api,
+      code: part.code ?? '',
+      name: part.name,
+      mime: part.mime,
+      size: part.size,
     );
-  }
-}
-
-/// An image fetch with the auth header, showing a placeholder while loading.
-class _ImageToolImage extends StatelessWidget {  final String code;
-  final AgentBindApi api;
-  const _ImageToolImage({required this.code, required this.api});
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<int>>(
-      future: api.fetchFileBytes(code),
-      builder: (context, snap) {
-        if (snap.hasData) {
-          return Image.memory(Uint8List.fromList(snap.data!),
-              fit: BoxFit.cover);
-        }
-        if (snap.hasError) {
-          return const Center(child: Icon(Icons.broken_image_rounded, size: 28));
-        }
-        return const Center(child: CircularProgressIndicator());
-      },
-    );
-  }
-}
-
-/// Pretty-print a byte count (B/KB/MB/GB).
-String _formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
-}
-
-/// A file chip surfaced from a text part that carries the
-/// `[附件 <name> | file:<code> | <mime> | <size>]` reference we embed in the
-/// prompt. Clicking it opens an inline image preview (by [code]) or triggers
-/// a public-Downloads save for non-image files.
-class _FileChip extends StatelessWidget {
-  final String code;
-  final String label;
-  final String? mime;
-  final AgentBindApi api;
-  const _FileChip({required this.code, required this.label, this.mime, required this.api});
-
-  bool get _isImage => (mime ?? '').startsWith('image/');
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = colorsOf(context);
-    final text = textOf(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs + 2),
-      decoration: BoxDecoration(
-        color: colors.muted.withValues(alpha: 0.5),
-        borderRadius: AppRadius.rSm,
-        border: Border.all(color: colors.border.withValues(alpha: 0.6)),
-      ),
-      child: InkWell(
-        borderRadius: AppRadius.rSm,
-        onTap: () => _open(context),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(_isImage ? Icons.image_rounded : Icons.attach_file_rounded,
-                size: 14, color: colors.mutedForeground),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(label,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.micro.copyWith(color: colors.foreground)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _open(BuildContext context) async {
-    try {
-      if (_isImage) {
-        final bytes = await api.fetchFileBytes(code);
-        if (!context.mounted) return;
-        // ignore: use_build_context_synchronously
-        showDialog<void>(
-          context: context,
-          builder: (_) => Dialog(
-            insetPadding: const EdgeInsets.all(16),
-            child: InteractiveViewer(
-              child: Image.memory(Uint8List.fromList(bytes)),
-            ),
-          ),
-        );
-      } else {
-        // Non-image files save into the public Downloads collection (and
-        // show a hop-free snackbar naming the destination).
-        final where = await DownloadService(api).download(
-          path: code,
-          displayName: label,
-          mimeType: mime ?? 'application/octet-stream',
-        );
-        if (!context.mounted) return;
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(context.l10n.savedToDownloads(where)),
-          duration: const Duration(seconds: 2),
-        ));
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(context.l10n.sendFailed('$e')),
-          duration: const Duration(seconds: 2)));
-    }
   }
 }
 
@@ -269,7 +46,13 @@ class _FileRefsText extends StatelessWidget {
       children: [
         for (final p in parts)
           p is _FileRef
-              ? _FileChip(code: p.code, label: p.label, mime: p.mime, api: api)
+              ? MediaCard(
+                  api: api,
+                  code: p.code,
+                  name: p.label,
+                  mime: p.mime,
+                  compact: true,
+                )
               : _Markdown(p as String),
       ],
     );
@@ -440,6 +223,7 @@ class MessageBubble extends StatelessWidget {
         parts.add(ToolPartView(
           part: part,
           isStreaming: isStreaming,
+          api: _api,
         ));
       } else if (part.type == 'compaction') {
         parts.add(_CompactionBlock(text: part.text));

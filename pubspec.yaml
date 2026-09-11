@@ -28,6 +28,9 @@ dependencies:
   protobuf: ^6.0.0
   http2: ^2.3.0
   record: ^7.1.1
+  just_audio: ^0.10.6
+  video_player: ^2.14.0
+  pdfx: ^2.11.0
 
 dev_dependencies:
   flutter_test:

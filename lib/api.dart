@@ -519,6 +519,7 @@ Message messageFromPb(sdk.Message m) {
             title: (d['name'] as String?) ?? '',
             input: (d['input'] as Map?)?.cast<String, dynamic>(),
             output: content is String ? content : null,
+            data: (res?['metadata'] as Map?)?.cast<String, dynamic>(),
           ),
         ));
       case 'tool_result':

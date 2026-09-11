@@ -214,6 +214,10 @@ class ToolState {
   final String? error;
   final Map<String, dynamic>? input;
   final String? output;
+  /// Structured result data (tool `data`), e.g. media tool fixed fields
+  /// (`images`/`videos`/`audio` file refs). Opaque to the UI except for the
+  /// known media keys rendered by [MediaCard].
+  final Map<String, dynamic>? data;
   final String? changeId;
   final String? diff;
   final int? additions;
@@ -225,6 +229,7 @@ class ToolState {
     this.error,
     this.input,
     this.output,
+    this.data,
     this.changeId,
     this.diff,
     this.additions,
@@ -237,6 +242,7 @@ class ToolState {
     String? error,
     Map<String, dynamic>? input,
     String? output,
+    Map<String, dynamic>? data,
     String? changeId,
     String? diff,
     int? additions,
@@ -248,6 +254,7 @@ class ToolState {
         error: error ?? this.error,
         input: input ?? this.input,
         output: output ?? this.output,
+        data: data ?? this.data,
         changeId: changeId ?? this.changeId,
         diff: diff ?? this.diff,
         additions: additions ?? this.additions,
@@ -260,6 +267,7 @@ class ToolState {
         error: j['error'] as String?,
         input: (j['input'] as Map?)?.cast<String, dynamic>(),
         output: j['output'] as String?,
+        data: (j['data'] as Map?)?.cast<String, dynamic>(),
         changeId: j['change_id'] as String?,
         diff: j['diff'] as String?,
         additions: j['additions'] as int?,
@@ -272,6 +280,7 @@ class ToolState {
         if (error != null) 'error': error,
         if (input != null) 'input': input,
         if (output != null) 'output': output,
+        if (data != null) 'data': data,
         if (changeId != null) 'change_id': changeId,
         if (diff != null) 'diff': diff,
         if (additions != null) 'additions': additions,
