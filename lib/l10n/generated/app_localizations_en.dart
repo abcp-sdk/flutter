@@ -281,6 +281,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noTest => 'No test';
 
   @override
+  String get holdToTalk => 'Hold to talk';
+
+  @override
+  String get releaseToSend => 'Release to send';
+
+  @override
+  String get abort => 'Abort';
+
+  @override
+  String get edit => 'Edit';
+
+  @override
+  String get voiceMode => 'Voice';
+
+  @override
+  String get keyboardMode => 'Keyboard';
+
+  @override
+  String get sessionInfo => 'Session info';
+
+  @override
   String get voiceStop => 'Stop & send';
 
   @override

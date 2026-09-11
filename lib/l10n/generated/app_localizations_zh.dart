@@ -281,6 +281,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noTest => '不可测试';
 
   @override
+  String get holdToTalk => '按住说话';
+
+  @override
+  String get releaseToSend => '松开发送';
+
+  @override
+  String get abort => '中止';
+
+  @override
+  String get edit => '编辑';
+
+  @override
+  String get voiceMode => '语音';
+
+  @override
+  String get keyboardMode => '键盘';
+
+  @override
+  String get sessionInfo => '会话信息';
+
+  @override
   String get voiceStop => '停止并发送';
 
   @override

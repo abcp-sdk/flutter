@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -94,7 +95,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     } catch (_) {}
     try {
       _presets = await widget.store.api.presets(
-          locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh));
+        locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
+      );
     } catch (_) {}
     if (mounted) setState(() {});
     // Do NOT hijack store.codeOrg/codeRepo here: the Code tab is an
@@ -112,8 +114,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     if (_boundSid == sid && _msg != null) return;
     _boundSid = sid;
     _msg?.dispose();
-    final m = MessagesController(
-        api: store.api, getSessionId: () => sid);
+    final m = MessagesController(api: store.api, getSessionId: () => sid);
     m.onSessionEvent((event, params) {
       if (event == 'turn-complete') {
         store.bumpSessionRevision();
@@ -174,14 +175,13 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // Never send while an attachment is still uploading.
     if (_pendingAttachments.any((a) => a.isUploading)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.l10n.waitUpload)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(context.l10n.waitUpload)));
       }
       return;
     }
     // Drop errored attachments from the outgoing batch.
-    final attachments =
-        _pendingAttachments.where((a) => !a.hasError).toList();
+    final attachments = _pendingAttachments.where((a) => !a.hasError).toList();
     _pendingAttachments = [];
     _input.clear();
     // A freshly sent message should always land at the bottom.
@@ -197,6 +197,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   // ---- voice recording ----------------------------------------------------
   final VoiceRecorder _voice = VoiceRecorder();
   bool _recording = false;
+
+  /// Voice input mode (mic vs keyboard toggle in the composer).
+  bool _voiceMode = false;
   Duration _voiceElapsed = Duration.zero;
   Timer? _voiceTicker;
 
@@ -206,8 +209,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     final ok = await _voice.start();
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.voicePermission)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.l10n.voicePermission)));
       return;
     }
     setState(() {
@@ -236,33 +239,6 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     _voiceTicker = null;
     _voice.cancel();
     if (mounted) setState(() => _recording = false);
-  }
-
-  /// The recording bar: elapsed time + cancel.
-  Widget _recordingBar(BuildContext context) {
-    final colors = colorsOf(context);
-    final text = textOf(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Row(
-        children: [
-          Icon(Icons.graphic_eq_rounded,
-              size: 16, color: colors.destructive),
-          const SizedBox(width: AppSpacing.sm),
-          Text(context.l10n.voiceRecording,
-              style: text.micro.copyWith(color: colors.destructive)),
-          const Spacer(),
-          TextButton(
-            style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact),
-            onPressed: _cancelRecording,
-            child: Text(context.l10n.cancel,
-                style:
-                    text.micro.copyWith(color: colors.mutedForeground)),
-          ),
-        ],
-      ),
-    );
   }
 
   /// Open the attach bottom sheet: camera / gallery / files. A selected item
@@ -313,11 +289,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       return;
     }
     if (x == null) return;
-    _uploadOne(UploadedFileSource(
-      path: x.path,
-      name: x.name,
-      mimeType: _mimeOf(x.name),
-    ));
+    _uploadOne(
+      UploadedFileSource(path: x.path, name: x.name, mimeType: _mimeOf(x.name)),
+    );
   }
 
   Future<void> _pickFiles() async {
@@ -326,11 +300,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     for (final f in result) {
       final path = f.path;
       if (path == null) continue;
-      _uploadOne(UploadedFileSource(
-        path: path,
-        name: f.name,
-        mimeType: _mimeOf(f.name),
-      ));
+      _uploadOne(
+        UploadedFileSource(path: path, name: f.name, mimeType: _mimeOf(f.name)),
+      );
     }
   }
 
@@ -341,8 +313,11 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     setState(() {
       _pendingAttachments = [
         ..._pendingAttachments,
-        UploadedFile(code: '', name: src.name, mime: src.mimeType)
-            .uploading(src.path),
+        UploadedFile(
+          code: '',
+          name: src.name,
+          mime: src.mimeType,
+        ).uploading(src.path),
       ];
     });
     try {
@@ -406,50 +381,70 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
           height: 34,
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => const SizedBox(
-              width: 34,
-              height: 34,
-              child: Icon(Icons.broken_image_outlined, size: 16)),
+            width: 34,
+            height: 34,
+            child: Icon(Icons.broken_image_outlined, size: 16),
+          ),
         ),
       );
     } else {
-      leading = Icon(Icons.attach_file_rounded,
-          size: 14, color: colors.mutedForeground);
+      leading = Icon(
+        Icons.attach_file_rounded,
+        size: 14,
+        color: colors.mutedForeground,
+      );
     }
     Widget trailing;
     if (a.isUploading) {
       trailing = const SizedBox(
-          width: 14,
-          height: 14,
-          child: CircularProgressIndicator(strokeWidth: 2));
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
     } else if (a.hasError) {
       trailing = InkWell(
-        onTap: () => _uploadOne(UploadedFileSource(
-            path: a.localPath, name: a.name ?? '', mimeType: a.mime ?? '')),
+        onTap: () => _uploadOne(
+          UploadedFileSource(
+            path: a.localPath,
+            name: a.name ?? '',
+            mimeType: a.mime ?? '',
+          ),
+        ),
         child: Icon(Icons.refresh_rounded, size: 16, color: colors.warning),
       );
     } else {
       trailing = InkWell(
         onTap: () {
           setState(() {
-            _pendingAttachments =
-                _pendingAttachments.where((x) => x != a).toList();
+            _pendingAttachments = _pendingAttachments
+                .where((x) => x != a)
+                .toList();
           });
         },
-        child: Icon(Icons.cancel_rounded, size: 16, color: colors.mutedForeground),
+        child: Icon(
+          Icons.cancel_rounded,
+          size: 16,
+          color: colors.mutedForeground,
+        ),
       );
     }
     return Material(
       color: colors.muted.withValues(alpha: 0.5),
       borderRadius: AppRadius.rSm,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 2),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: 2,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             leading,
             const SizedBox(width: AppSpacing.xs),
-            Text(a.name ?? a.code,
-                style: text.micro.copyWith(color: colors.foreground)),
+            Text(
+              a.name ?? a.code,
+              style: text.micro.copyWith(color: colors.foreground),
+            ),
             const SizedBox(width: AppSpacing.xs),
             trailing,
           ],
@@ -459,8 +454,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   }
 
   void _applySession(Session updated) {
-    store.sessions =
-        store.sessions.map((s) => s.id == updated.id ? updated : s).toList();
+    store.sessions = store.sessions
+        .map((s) => s.id == updated.id ? updated : s)
+        .toList();
     store.notifyObservers();
     // Rebuild the chat screen so the header (model/preset indicator) and any
     // activeSession-dependent widgets reflect the just-applied settings.
@@ -500,17 +496,26 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     );
   }
 
-  /// The model id half of a canonical "provider_id/model_id" reference (the
-  /// provider is implied by the session settings and is not shown here).
-  static String _shortModel(String ref) {
-    final slash = ref.indexOf('/');
-    return slash > 0 ? ref.substring(slash + 1) : ref;
+  /// Short context-size label: <10k → `X.Yk`, 10k–999k → `XXXk`,
+  /// ≥1M → `X.YM`. Returns '' for 0 (nothing measured yet).
+  static String _fmtContext(int tokens) {
+    if (tokens <= 0) return '';
+    if (tokens >= 1000000) {
+      return '${(tokens / 1000000).toStringAsFixed(1)}M';
+    }
+    if (tokens >= 10000) {
+      final k = (tokens / 1000).round();
+      return '${k}k';
+    }
+    return '${(tokens / 1000).toStringAsFixed(1)}k';
   }
 
   Widget _topBar(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
     final s = store.activeSession;
+    final last = (s?.lastInputTokens ?? 0) + (s?.lastOutputTokens ?? 0);
+    final ctxLabel = _fmtContext(last);
     return SafeArea(
       bottom: false,
       child: SizedBox(
@@ -523,6 +528,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 icon: const Icon(Icons.arrow_back_rounded, size: 22),
                 onPressed: () => store.popPage(),
               ),
+              // Status lamp: green idle / yellow running.
               Container(
                 width: 8,
                 height: 8,
@@ -534,68 +540,52 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              // Title + model/preset chip share the space; the popup-menu
-              // button is a fixed child so it can never be pushed off-screen.
+              // Context size (was the composer footer): e.g. "1.8k".
+              if (ctxLabel.isNotEmpty) ...[
+                Text(
+                  ctxLabel,
+                  style: text.micro.copyWith(
+                    color: colors.mutedForeground,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              // Session name → tap/hover opens an info popover (provider /
+              // model / preset / agent language) with an Edit action.
               Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        s != null && (s.org.isNotEmpty || s.repo.isNotEmpty)
-                            ? '${s.org}/${s.repo}'
-                                '${s.branch.isNotEmpty ? '/${s.branch}' : ''}'
-                            : context.l10n.chatTitle,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.meta.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: colors.mutedForeground),
-                      ),
+                child: _SessionInfoAnchor(
+                  session: s,
+                  onEdit: _showSettings,
+                  child: Text(
+                    s?.id ?? context.l10n.chatTitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.meta.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colors.foreground,
                     ),
-                    // Current model / preset — visible feedback that session
-                    // settings applied. The model is a canonical
-                    // "provider_id/model_id" ref; only the model id half is
-                    // shown (the provider is implied by settings).
-                    if (s != null && (s.model.isNotEmpty || s.preset.isNotEmpty)) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: colors.muted.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            [
-                              if (s.model.isNotEmpty) _shortModel(s.model),
-                              if (s.preset.isNotEmpty) s.preset,
-                            ].join(' · '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.micro.copyWith(
-                                color: colors.mutedForeground, fontSize: 10),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
               PopupMenuButton<String>(
                 onSelected: (v) => _menuAction(v),
                 itemBuilder: (context) => [
-                  PopupMenuItem(value: 'settings', child: Text(context.l10n.sessionSettings)),
-                  PopupMenuItem(value: 'compact', child: Text(context.l10n.compactHistory)),
-                  PopupMenuItem(value: 'mailbox', child: Text(context.l10n.mailbox)),
-                  const PopupMenuDivider(),
                   PopupMenuItem(
-                    value: 'fork',
-                    child: Text(context.l10n.fork),
+                    value: 'compact',
+                    child: Text(context.l10n.compactHistory),
                   ),
                   PopupMenuItem(
+                    value: 'mailbox',
+                    child: Text(context.l10n.mailbox),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(value: 'fork', child: Text(context.l10n.fork)),
+                  PopupMenuItem(
                     value: 'delete',
-                    child: Text(context.l10n.deleteSession,
-                        style: TextStyle(color: colors.destructive)),
+                    child: Text(
+                      context.l10n.deleteSession,
+                      style: TextStyle(color: colors.destructive),
+                    ),
                   ),
                 ],
               ),
@@ -608,8 +598,6 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
 
   void _menuAction(String v) {
     switch (v) {
-      case 'settings':
-        _showSettings();
       case 'compact':
         _compact();
       case 'mailbox':
@@ -640,13 +628,14 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         content: Text(context.l10n.deleteSessionBody(label)),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(ctx.l10n.cancel),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: colorsOf(ctx).destructive,
-                foregroundColor: Colors.white),
+              backgroundColor: colorsOf(ctx).destructive,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(ctx.l10n.delete),
           ),
@@ -692,18 +681,21 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       if (created) {
         // A compaction checkpoint was created: reopen the conversation so the
         // new "历史已压缩" summary message renders at the top of the tail.
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(context.l10n.historyCompacted)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.historyCompacted)));
         await _setup();
       } else {
         // Nothing to fold (the agent returns {ok:false}); the current
         // conversation is unchanged.
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(context.l10n.nothingToCompact)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.nothingToCompact)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -720,8 +712,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // provider dropdown pre-selects the owner.
     final currentModel = store.activeSession?.model ?? '';
     final slash = currentModel.indexOf('/');
-    String provider =
-        slash > 0 ? currentModel.substring(0, slash) : '';
+    String provider = slash > 0 ? currentModel.substring(0, slash) : '';
     String model = slash > 0 ? currentModel.substring(slash + 1) : currentModel;
     String variant = store.activeSession?.variant ?? '';
     String preset = store.activeSession?.preset ?? '';
@@ -731,7 +722,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // option: pick the owner of the session's current model (else the first
     // registered provider), then load only that provider's models.
     final providerIds = _providers.keys.toList();
-    if (provider.isEmpty && providerIds.isNotEmpty) provider = providerIds.first;
+    if (provider.isEmpty && providerIds.isNotEmpty)
+      provider = providerIds.first;
     List<ModelInfo> modelsForProvider = [];
     List<ModelVariantInfo> variantsForModel = [];
     bool loadingModels = true;
@@ -740,9 +732,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       variantsForModel = sel.isEmpty ? const [] : sel.first.variants;
       if (!variantsForModel.any((v) => v.id == variant)) variant = '';
     }
-    Future<void> loadModels(
-      void Function(void Function()) setState,
-    ) async {
+
+    Future<void> loadModels(void Function(void Function()) setState) async {
       setState(() => loadingModels = true);
       try {
         final list = await store.api.models(providerId: provider);
@@ -759,11 +750,14 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         if (mounted) setState(() => loadingModels = false);
       }
     }
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          if (loadingModels && modelsForProvider.isEmpty && provider.isNotEmpty) {
+          if (loadingModels &&
+              modelsForProvider.isEmpty &&
+              provider.isNotEmpty) {
             // First open: kick off the initial model load once.
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (modelsForProvider.isEmpty) loadModels(setState);
@@ -790,12 +784,12 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 children: [
                   // 1) Provider. 2) Model (fetched for the chosen provider).
                   DropdownButtonFormField<String>(
-                    initialValue:
-                        providerIds.contains(provider) ? provider : null,
+                    initialValue: providerIds.contains(provider)
+                        ? provider
+                        : null,
                     items: [
                       if (providerIds.isEmpty)
-                        DropdownMenuItem(
-                            value: '', child: Text(ctx.l10n.none)),
+                        DropdownMenuItem(value: '', child: Text(ctx.l10n.none)),
                       for (final pid in providerIds)
                         DropdownMenuItem(value: pid, child: Text(pid)),
                     ],
@@ -804,21 +798,19 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                       setState(() => modelsForProvider = []);
                       loadModels(setState);
                     },
-                    decoration:
-                        InputDecoration(labelText: ctx.l10n.providers),
+                    decoration: InputDecoration(labelText: ctx.l10n.providers),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   DropdownButtonFormField<String>(
                     initialValue: model.isEmpty ? null : model,
                     items: [
                       if (modelsForProvider.isEmpty)
-                        DropdownMenuItem(
-                            value: '', child: Text(ctx.l10n.none)),
+                        DropdownMenuItem(value: '', child: Text(ctx.l10n.none)),
                       for (final m in modelsForProvider)
                         DropdownMenuItem(
-                            value: m.id,
-                            child: Text(
-                                m.name.isNotEmpty ? m.name : m.id)),
+                          value: m.id,
+                          child: Text(m.name.isNotEmpty ? m.name : m.id),
+                        ),
                       // Keep the session's current model selectable even if the
                       // registry no longer lists it.
                       if (model.isNotEmpty &&
@@ -838,16 +830,19 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                       initialValue: variant.isEmpty ? '' : variant,
                       items: [
                         DropdownMenuItem(
-                            value: '', child: Text(ctx.l10n.variantNone)),
+                          value: '',
+                          child: Text(ctx.l10n.variantNone),
+                        ),
                         for (final v in variantsForModel)
                           DropdownMenuItem(
-                              value: v.id,
-                              child: Text(
-                                  v.name.isNotEmpty ? v.name : v.id)),
+                            value: v.id,
+                            child: Text(v.name.isNotEmpty ? v.name : v.id),
+                          ),
                       ],
                       onChanged: (v) => setState(() => variant = v ?? ''),
-                      decoration:
-                          InputDecoration(labelText: ctx.l10n.variantLabel),
+                      decoration: InputDecoration(
+                        labelText: ctx.l10n.variantLabel,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
@@ -858,7 +853,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                         DropdownMenuItem(value: id, child: Text(id)),
                     ],
                     onChanged: (v) => setState(() => preset = v ?? ''),
-                    decoration: InputDecoration(labelText: ctx.l10n.presetLabel),
+                    decoration: InputDecoration(
+                      labelText: ctx.l10n.presetLabel,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   // Per-session language override.
@@ -866,7 +863,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                     initialValue: locale.isEmpty ? '' : locale,
                     items: localeOptions,
                     onChanged: (v) => setState(() => locale = v ?? ''),
-                    decoration: InputDecoration(labelText: ctx.l10n.agentLocale),
+                    decoration: InputDecoration(
+                      labelText: ctx.l10n.agentLocale,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   // Max turns is governed by the preset (set when the preset is
@@ -874,15 +873,13 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                   // System prompt is governed by the selected preset.
                   Text(
                     ctx.l10n.turnsByPreset,
-                    style: textOf(ctx)
-                        .micro
+                    style: textOf(ctx).micro
                         .copyWith(color: colorsOf(ctx).mutedForeground),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     ctx.l10n.sysPromptByPreset,
-                    style: textOf(ctx)
-                        .micro
+                    style: textOf(ctx).micro
                         .copyWith(color: colorsOf(ctx).mutedForeground),
                   ),
                 ],
@@ -890,8 +887,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
             ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text(ctx.l10n.cancel),
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(ctx.l10n.cancel),
               ),
               FilledButton(
                 onPressed: () async {
@@ -935,16 +932,18 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     return ListView.builder(
       controller: _scroll,
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
       itemCount: m.sorted.length + (m.hasMore ? 1 : 0),
       itemBuilder: (context, i) {
         if (i == 0 && m.hasMore) {
           return Center(
             child: TextButton(
               onPressed: m.loading ? null : () => m.loadMore(),
-              child: Text(m.loading
-                  ? context.l10n.loading
-                  : context.l10n.loadEarlier),
+              child: Text(
+                m.loading ? context.l10n.loading : context.l10n.loadEarlier,
+              ),
             ),
           );
         }
@@ -953,7 +952,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
           key: ValueKey(msg.id),
           msg: msg,
           onUndo: (id) => m.revert(id),
-          
+
           api: store.api,
           org: store.activeSession?.org ?? '',
           repo: store.activeSession?.repo ?? '',
@@ -966,116 +965,130 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   Widget _composer(BuildContext context) {
     final m = _msg;
     final colors = colorsOf(context);
-    final text = textOf(context);
     final sending = m?.sending ?? false;
-    final last = ((store.activeSession?.lastInputTokens ?? 0) +
-        (store.activeSession?.lastOutputTokens ?? 0));
+    final hasContent =
+        _input.text.trim().isNotEmpty || _pendingAttachments.isNotEmpty;
     return Container(
       decoration: BoxDecoration(
-          color: colors.card,
-          border: Border(
-              top: BorderSide(color: colors.border.withValues(alpha: 0.5)))),
+        color: colors.card,
+        border: Border(
+          top: BorderSide(color: colors.border.withValues(alpha: 0.5)),
+        ),
+      ),
       child: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.sm),
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            AppSpacing.xs,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (_pendingAttachments.isNotEmpty)
-                _attachmentRow(context),
-              if (_recording) _recordingBar(context),
+              if (_pendingAttachments.isNotEmpty) _attachmentRow(context),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  // Left: mic/keyboard toggle. In voice mode the middle becomes
+                  // a press-and-hold "hold to talk" button.
                   IconButton(
-                    tooltip: context.l10n.attach,
-                    onPressed: sending ? null : _openAttachSheet,
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                    tooltip: _voiceMode
+                        ? context.l10n.keyboardMode
+                        : context.l10n.voiceMode,
+                    onPressed: sending
+                        ? null
+                        : () => setState(() => _voiceMode = !_voiceMode),
+                    icon: Icon(
+                      _voiceMode
+                          ? Icons.keyboard_alt_outlined
+                          : Icons.mic_none_rounded,
+                      size: 22,
+                    ),
                   ),
                   Expanded(
-                    child: _recording
-                        // Recording: show elapsed time instead of the text
-                        // field (tap-cancel lives in the bar above).
-                        ? Text(
-                            _formatDuration(_voiceElapsed),
-                            textAlign: TextAlign.center,
-                            style: text.meta.copyWith(
-                                color: colors.destructive,
-                                fontWeight: FontWeight.w600),
-                          )
+                    child: _voiceMode
+                        ? _holdToTalkButton(context)
                         : TextField(
                             controller: _input,
                             focusNode: _inputFocus,
                             // Keep typing while the agent works (IM convention);
-                            // only the send button becomes a stop button.
+                            // only the send/plus button morphs.
                             minLines: 1,
                             maxLines: 6,
                             textInputAction: TextInputAction.newline,
                             onChanged: (_) => setState(() {}),
                             decoration: InputDecoration(
-                              hintText:
-                                  _pendingAttachments.isEmpty ? context.l10n.typeMessage : '',
+                              hintText: _pendingAttachments.isEmpty
+                                  ? context.l10n.typeMessage
+                                  : '',
                             ),
                           ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
+                  // Right: one morphing button — abort (running) / send (has
+                  // content) / plus (empty → open attach sheet).
                   sending
                       ? IconButton.filled(
                           style: IconButton.styleFrom(
                             backgroundColor: colors.destructive,
                             foregroundColor: Colors.white,
                           ),
+                          tooltip: context.l10n.abort,
                           icon: const Icon(Icons.stop_rounded, size: 20),
                           onPressed: () => m?.stop(),
                         )
-                      : _recording
-                          ? IconButton.filled(
-                              style: IconButton.styleFrom(
-                                backgroundColor: colors.destructive,
-                                foregroundColor: Colors.white,
-                              ),
-                              tooltip: context.l10n.voiceStop,
-                              icon: const Icon(Icons.stop_rounded, size: 20),
-                              onPressed: _stopRecording,
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: context.l10n.recordVoice,
-                                  onPressed: _startRecording,
-                                  icon: const Icon(Icons.mic_none_rounded,
-                                      size: 20),
-                                ),
-                                const SizedBox(width: AppSpacing.xs),
-                                IconButton.filled(
-                                  onPressed: (_input.text.trim().isEmpty &&
-                                          _pendingAttachments.isEmpty)
-                                      ? null
-                                      : _send,
-                                  icon: const Icon(Icons.send_rounded, size: 20),
-                                ),
-                              ],
-                            ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              // Footer: right-aligned context token total (last turn's
-              // request context), shown as e.g. "上下文 13.2K / Context 13.2K".
-              Row(
-                children: [
-                  const Spacer(),
-                  if (last > 0)
-                    Text(
-                      '${context.l10n.contextTokens} ${_k(last)}',
-                      style: text.micro.copyWith(
-                          color: colors.mutedForeground),
-                    ),
+                      : hasContent
+                      ? IconButton.filled(
+                          icon: const Icon(Icons.send_rounded, size: 20),
+                          onPressed: _send,
+                        )
+                      : IconButton.filledTonal(
+                          tooltip: context.l10n.attach,
+                          icon: const Icon(Icons.add_rounded, size: 22),
+                          onPressed: _openAttachSheet,
+                        ),
                 ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Press-and-hold voice button (WeChat style): hold to record, release to
+  /// send the clip as an attachment. Stays in voice mode afterwards.
+  Widget _holdToTalkButton(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: (_) => _startRecording(),
+      onLongPressEnd: (_) => _stopRecording(),
+      onLongPressCancel: _cancelRecording,
+      child: Container(
+        height: 42,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _recording
+              ? colors.destructive.withValues(alpha: 0.15)
+              : colors.muted.withValues(alpha: 0.4),
+          borderRadius: AppRadius.rSm,
+          border: Border.all(
+            color: _recording
+                ? colors.destructive
+                : colors.border.withValues(alpha: 0.6),
+          ),
+        ),
+        child: Text(
+          _recording
+              ? '${context.l10n.releaseToSend} · ${_formatDuration(_voiceElapsed)}'
+              : context.l10n.holdToTalk,
+          style: text.meta.copyWith(
+            color: _recording ? colors.destructive : colors.mutedForeground,
+            fontWeight: _recording ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
       ),
@@ -1087,10 +1100,144 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     final s = d.inSeconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
   }
-
-  static String _k(int n) {
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
-  }
 }
 
+/// Anchors a small info popover to a child (the session name). Opens on tap
+/// (mobile) and on hover (desktop); the popover lists the session's provider /
+/// model / preset / agent language and offers an Edit action that opens the
+/// full session-settings dialog.
+class _SessionInfoAnchor extends StatefulWidget {
+  final Session? session;
+  final Widget child;
+  final VoidCallback onEdit;
+  const _SessionInfoAnchor({
+    required this.session,
+    required this.child,
+    required this.onEdit,
+  });
+
+  @override
+  State<_SessionInfoAnchor> createState() => _SessionInfoAnchorState();
+}
+
+class _SessionInfoAnchorState extends State<_SessionInfoAnchor> {
+  final OverlayPortalController _ctrl = OverlayPortalController();
+  final LayerLink _link = LayerLink();
+  Timer? _closeTimer;
+
+  void _toggle() => _ctrl.isShowing ? _ctrl.hide() : _ctrl.show();
+
+  // Grace period so the pointer can travel from the name into the popover
+  // (which lives in a separate overlay) without it vanishing.
+  void _scheduleClose() {
+    _closeTimer?.cancel();
+    _closeTimer = Timer(const Duration(milliseconds: 220), () {
+      if (mounted) _ctrl.hide();
+    });
+  }
+
+  void _cancelClose() => _closeTimer?.cancel();
+
+  @override
+  void dispose() {
+    _closeTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _link,
+      child: OverlayPortal(
+        controller: _ctrl,
+        overlayChildBuilder: (context) => _popover(context),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) {
+            _cancelClose();
+            _ctrl.show();
+          },
+          onExit: (_) => _scheduleClose(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggle,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _popover(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    final s = widget.session;
+    final modelRef = s?.model ?? '';
+    final slash = modelRef.indexOf('/');
+    final provider = slash > 0 ? modelRef.substring(0, slash) : '';
+    final model = slash > 0 ? modelRef.substring(slash + 1) : modelRef;
+    final locale = s?.locale ?? '';
+    String row(String label, String value) =>
+        value.isEmpty ? '' : '$label: $value\n';
+    final body = StringBuffer()
+      ..write(row(context.l10n.providers, provider))
+      ..write(row(context.l10n.modelLabel, model))
+      ..write(row(context.l10n.presetLabel, s?.preset ?? ''))
+      ..write(
+        row(
+          context.l10n.agentLocale,
+          locale.isEmpty ? context.l10n.agentLocaleFollow : locale,
+        ),
+      );
+    return CompositedTransformFollower(
+      link: _link,
+      targetAnchor: Alignment.bottomLeft,
+      followerAnchor: Alignment.topLeft,
+      showWhenUnlinked: false,
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: MouseRegion(
+          onEnter: (_) => _cancelClose(),
+          onExit: (_) => _scheduleClose(),
+          child: Material(
+            color: colors.card,
+            elevation: 6,
+            borderRadius: AppRadius.rMd,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 280),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.rMd,
+                border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    body.toString().trimRight(),
+                    style: text.micro.copyWith(color: colors.foreground),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonal(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        _ctrl.hide();
+                        widget.onEdit();
+                      },
+                      child: Text(context.l10n.edit),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

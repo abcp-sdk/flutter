@@ -620,6 +620,48 @@ abstract class AppLocalizations {
   /// **'不可测试'**
   String get noTest;
 
+  /// No description provided for @holdToTalk.
+  ///
+  /// In zh, this message translates to:
+  /// **'按住说话'**
+  String get holdToTalk;
+
+  /// No description provided for @releaseToSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'松开发送'**
+  String get releaseToSend;
+
+  /// No description provided for @abort.
+  ///
+  /// In zh, this message translates to:
+  /// **'中止'**
+  String get abort;
+
+  /// No description provided for @edit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get edit;
+
+  /// No description provided for @voiceMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音'**
+  String get voiceMode;
+
+  /// No description provided for @keyboardMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'键盘'**
+  String get keyboardMode;
+
+  /// No description provided for @sessionInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话信息'**
+  String get sessionInfo;
+
   /// No description provided for @voiceStop.
   ///
   /// In zh, this message translates to:
