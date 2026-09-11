@@ -44,8 +44,24 @@ class ConfigSubPage extends AppPage {
   const ConfigSubPage(this.id) : super('config_sub_$id');
 }
 
+/// Config tab — the provider list (its own page with an add action in the bar).
+class ProvidersListPage extends AppPage {
+  const ProvidersListPage() : super('providers_list');
+}
+
+/// Config tab — add/edit a single provider's connection fields; its bottom
+/// section lists the provider's models and offers "+" → [ProviderModelsPage].
+class ProviderFormPage extends AppPage {
+  const ProviderFormPage() : super('provider_form');
+}
+
+/// Config tab — add a model to the provider draft being edited.
+class ProviderModelsPage extends AppPage {
+  const ProviderModelsPage() : super('provider_models');
+}
+
 /// The stack-bottom page for a given tab.
 AppPage rootPageFor(SiderTab tab) => switch (tab) {
-      SiderTab.chat => const ChatListPage(),
-      SiderTab.config => const ConfigRootPage(),
-    };
+  SiderTab.chat => const ChatListPage(),
+  SiderTab.config => const ConfigRootPage(),
+};

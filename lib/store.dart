@@ -58,8 +58,7 @@ class AppStore extends ChangeNotifier {
 
   void _onSessionStreamClosed() {
     if (_sessionAttempt >= _maxSessionAttempts) return;
-    final delay = Duration(
-        seconds: min(30, 1 << min(_sessionAttempt, 5)));
+    final delay = Duration(seconds: min(30, 1 << min(_sessionAttempt, 5)));
     _sessionAttempt++;
     _sessionReconnect?.cancel();
     _sessionReconnect = Timer(delay, startSessionWatch);
@@ -91,8 +90,7 @@ class AppStore extends ChangeNotifier {
         }
       }
       if (ev.removed.isNotEmpty) {
-        sessions =
-            sessions.where((s) => !ev.removed.contains(s.id)).toList();
+        sessions = sessions.where((s) => !ev.removed.contains(s.id)).toList();
       }
     }
     // The session currently open is being read live: advance its watermark as
@@ -134,8 +132,7 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<String> get existingBranchs =>
-      sessions.map((s) => s.branch).toList();
+  List<String> get existingBranchs => sessions.map((s) => s.branch).toList();
 
   Future<void> deleteSession(String id) async {
     await api.deleteSession(id);
@@ -217,6 +214,23 @@ class AppStore extends ChangeNotifier {
   /// True when [s] has at least one unread message.
   bool isUnread(Session s) => unreadCountFor(s) > 0;
 
+  /// Provider draft shared by the provider-form and model-form config pages.
+  /// Null when not editing. Model mutations happen here so navigating between
+  /// the two form pages never loses the in-progress edit.
+  ProviderDraft? providerDraft;
+
+  void beginProviderDraft(ProviderInfo? existing) {
+    providerDraft = existing == null
+        ? ProviderDraft(apiType: 'openai-compatible')
+        : ProviderDraft.fromProvider(existing);
+    notifyListeners();
+  }
+
+  void endProviderDraft() {
+    providerDraft = null;
+    notifyListeners();
+  }
+
   void openOverlay(SessionOverlay v) {
     if (activeSessionId == null) return;
     sessionOverlay = v;
@@ -268,7 +282,9 @@ class AppStore extends ChangeNotifier {
   /// file doesn't grow the stack).
   void pushPage(AppPage page) {
     final list = currentStack;
-    final idx = page.key == null ? -1 : list.indexWhere((p) => p.key == page.key);
+    final idx = page.key == null
+        ? -1
+        : list.indexWhere((p) => p.key == page.key);
     if (idx != -1) {
       // Truncate to the existing entry, then re-append a fresh one.
       list.removeRange(idx, list.length);

@@ -22,9 +22,11 @@ class ConfigScreen extends StatefulWidget {
   final bool darkMode;
   final ValueChanged<bool> onDarkMode;
   final VoidCallback? onSwitchBackend;
+
   /// Switch to another saved backend (rebuilds the whole store). Used by the
   /// "backend" drill-in on tablets.
   final void Function(BackendCfg backend)? onBackendSwitched;
+
   /// When null this is the settings list (stack root); otherwise it renders the
   /// given drill-in page (providers / presets / tools / appearance).
   final String? initialId;
@@ -42,8 +44,8 @@ class ConfigScreen extends StatefulWidget {
   State<ConfigScreen> createState() => _ConfigScreenState();
 }
 
-class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => widget.store;
-  Map<String, ProviderInfo> _providers = {};
+class _ConfigScreenState extends State<ConfigScreen> {
+  AppStore get store => widget.store;
   bool _loading = true;
 
   @override
@@ -53,11 +55,8 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final p = await store.api.providers();
-      if (mounted) _providers = p;
-    } catch (_) {}
+    // The config root only needs to exist; individual detail pages load their
+    // own data. Keep a brief loading state for the first frame.
     if (mounted) setState(() => _loading = false);
   }
 
@@ -75,15 +74,17 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
       appBar: AppBar(
         leading: isDetail
             ? IconButton(
-                icon: const Icon(Icons.arrow_back), onPressed: () => store.popPage())
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => store.popPage(),
+              )
             : null,
         title: Text(isDetail ? _titleOf(id) : context.l10n.tabConfig),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : isDetail
-              ? _detail(id, context)
-              : _listView(context),
+          ? _detail(id, context)
+          : _listView(context),
     );
   }
 
@@ -108,37 +109,63 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
     return ListView(
       children: [
         _SectionHeader(context.l10n.appearance),
-        _listTile(context, Icons.palette_outlined, 'appearance',
-            () => _push('appearance')),
+        _listTile(
+          context,
+          Icons.palette_outlined,
+          'appearance',
+          () => _push('appearance'),
+        ),
         _SectionHeader(context.l10n.backendSection),
         // Highlighted as a dangerous action: switching disconnects the
         // active workspace mid-flight.
         ListTile(
-          leading: Icon(Icons.swap_horiz_rounded,
-              size: 20, color: colorsOf(context).destructive),
-          title: Text(context.l10n.switchBackend,
-              style: textOf(context).meta.copyWith(
-                  color: colorsOf(context).destructive,
-                  fontWeight: FontWeight.w600)),
-          trailing: Icon(Icons.chevron_right,
-              size: 18, color: colorsOf(context).destructive),
+          leading: Icon(
+            Icons.swap_horiz_rounded,
+            size: 20,
+            color: colorsOf(context).destructive,
+          ),
+          title: Text(
+            context.l10n.switchBackend,
+            style: textOf(context).meta.copyWith(
+              color: colorsOf(context).destructive,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          trailing: Icon(
+            Icons.chevron_right,
+            size: 18,
+            color: colorsOf(context).destructive,
+          ),
           onTap: () => _push('backends'),
         ),
         _SectionHeader(context.l10n.llm),
-        _listTile(context, Icons.dns_outlined, 'providers',
-            () => _push('providers')),
         _listTile(
-            context, Icons.auto_awesome_outlined, 'presets', () => _push('presets')),
+          context,
+          Icons.dns_outlined,
+          'providers',
+          () => store.pushPage(const ProvidersListPage()),
+        ),
+        _listTile(
+          context,
+          Icons.auto_awesome_outlined,
+          'presets',
+          () => _push('presets'),
+        ),
         _SectionHeader(context.l10n.workspace),
         _listTile(
-            context, Icons.handyman_outlined, 'tools', () => _push('tools')),
+          context,
+          Icons.handyman_outlined,
+          'tools',
+          () => _push('tools'),
+        ),
         _SectionHeader(context.l10n.language),
         _listTile(context, Icons.language_rounded, 'language', _pickLanguage),
         _listTile(
-            context,
-            Icons.translate_rounded,
-            'agentLocale',
-            _pickAgentLocale),
+          context,
+          Icons.translate_rounded,
+          'agentLocale',
+          _pickAgentLocale,
+        ),
       ],
     );
   }
@@ -156,10 +183,11 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
           ])
             ListTile(
               leading: Icon(
-                  agentLocaleValue == code
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  color: colorsOf(ctx).primary),
+                agentLocaleValue == code
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: colorsOf(ctx).primary,
+              ),
               title: Text(label),
               onTap: () => Navigator.pop(ctx, code),
             ),
@@ -175,10 +203,17 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
     try {
       await store.api.setConfigKey('locale', value);
       messenger.showSnackBar(
-          SnackBar(content: Text(context.l10n.agentLocaleApplied('$value'))));
+        SnackBar(content: Text(context.l10n.agentLocaleApplied('$value'))),
+      );
     } catch (e) {
       messenger.showSnackBar(
-          SnackBar(content: Text('$e', style: TextStyle(color: colorsOf(context).destructive))));
+        SnackBar(
+          content: Text(
+            '$e',
+            style: TextStyle(color: colorsOf(context).destructive),
+          ),
+        ),
+      );
     }
     setState(() {});
   }
@@ -190,16 +225,14 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
       builder: (ctx) => SimpleDialog(
         title: Text(ctx.l10n.language),
         children: [
-          for (final (code, label) in [
-            ('zh', '中文'),
-            ('en', 'English'),
-          ])
+          for (final (code, label) in [('zh', '中文'), ('en', 'English')])
             ListTile(
               leading: Icon(
-                  I18n.locale.languageCode == code
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  color: colorsOf(ctx).primary),
+                I18n.locale.languageCode == code
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: colorsOf(ctx).primary,
+              ),
               title: Text(label),
               onTap: () => Navigator.pop(ctx, code),
             ),
@@ -212,7 +245,11 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
   }
 
   Widget _listTile(
-      BuildContext context, IconData icon, String labelKey, VoidCallback onTap) {
+    BuildContext context,
+    IconData icon,
+    String labelKey,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       leading: Icon(icon, size: 20),
       title: Text(l10nString(labelKey)),
@@ -232,9 +269,7 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
       case 'tools':
         return _toolsDetail();
       case 'backends':
-        return _BackendsDetail(
-          onSwitched: widget.onBackendSwitched,
-        );
+        return _BackendsDetail(onSwitched: widget.onBackendSwitched);
       default:
         return const SizedBox.shrink();
     }
@@ -256,12 +291,7 @@ class _ConfigScreenState extends State<ConfigScreen> {  AppStore get store => wi
   }
 
   Widget _providersDetail() {
-    return ProvidersDetail(
-      key: const ValueKey('providers_detail'),
-      providers: _providers,
-      onChanged: _load,
-      api: store.api,
-    );
+    return ProvidersListScreen(store: store);
   }
 
   Widget _presetsDetail() {
@@ -280,12 +310,19 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xs),
-      child: Text(text.toUpperCase(),
-          style: textOf(context).micro.copyWith(
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
-              color: colorsOf(context).mutedForeground)),
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.xs,
+      ),
+      child: Text(
+        text.toUpperCase(),
+        style: textOf(context).micro.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+          color: colorsOf(context).mutedForeground,
+        ),
+      ),
     );
   }
 }
@@ -330,11 +367,13 @@ class _PresetsDetailState extends State<_PresetsDetail> {
     setState(() => _loading = true);
     try {
       _presets = await widget.api.presets(
-          locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh));
+        locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
+      );
     } catch (_) {}
     try {
       _tools = await widget.api.tools(
-          locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh));
+        locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
+      );
     } catch (_) {}
     setState(() => _loading = false);
   }
@@ -343,7 +382,8 @@ class _PresetsDetailState extends State<_PresetsDetail> {
     final id = _newId.text.trim();
     if (id.isEmpty) return;
     await widget.api.savePreset(
-        Preset(id: id, systemPrompt: '', tools: [], maxTurns: 30));
+      Preset(id: id, systemPrompt: '', tools: [], maxTurns: 30),
+    );
     setState(() {
       _showNew = false;
       _editingId = null;
@@ -353,9 +393,11 @@ class _PresetsDetailState extends State<_PresetsDetail> {
   }
 
   Future<void> _delete(Preset p) async {
-    final ok = await confirmDialog(context,
-        title: context.l10n.deletePreset,
-        description: context.l10n.deletePresetBody(p.id));
+    final ok = await confirmDialog(
+      context,
+      title: context.l10n.deletePreset,
+      description: context.l10n.deletePresetBody(p.id),
+    );
     if (ok) {
       await widget.api.deletePreset(p.id);
       setState(() => _editingId = null);
@@ -369,10 +411,11 @@ class _PresetsDetailState extends State<_PresetsDetail> {
     setState(() {
       _editingId = p.id;
       _edit = Preset(
-          id: p.id,
-          systemPrompt: p.systemPrompt,
-          tools: [...p.tools],
-          maxTurns: p.maxTurns);
+        id: p.id,
+        systemPrompt: p.systemPrompt,
+        tools: [...p.tools],
+        maxTurns: p.maxTurns,
+      );
     });
   }
 
@@ -395,11 +438,15 @@ class _PresetsDetailState extends State<_PresetsDetail> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(context.l10n.readOnlyPreset,
-              style: text.micro.copyWith(color: colors.warning)),
+          Text(
+            context.l10n.readOnlyPreset,
+            style: text.micro.copyWith(color: colors.warning),
+          ),
           const SizedBox(height: AppSpacing.sm),
-          Text(context.l10n.systemPrompt,
-              style: text.meta.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            context.l10n.systemPrompt,
+            style: text.meta.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Container(
             width: double.infinity,
@@ -408,12 +455,16 @@ class _PresetsDetailState extends State<_PresetsDetail> {
               color: colors.muted.withValues(alpha: 0.4),
               borderRadius: AppRadius.rSm,
             ),
-            child: SelectableText(p.localizedPrompt(agentLocale),
-                style: text.mono.copyWith(fontSize: 11)),
+            child: SelectableText(
+              p.localizedPrompt(agentLocale),
+              style: text.mono.copyWith(fontSize: 11),
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text('${context.l10n.tools} · ${p.tools.length}',
-              style: text.meta.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            '${context.l10n.tools} · ${p.tools.length}',
+            style: text.meta.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Wrap(
             spacing: AppSpacing.xs,
@@ -427,8 +478,10 @@ class _PresetsDetailState extends State<_PresetsDetail> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(context.l10n.presetSummary('${p.maxTurns}', '${p.tools.length}'),
-              style: text.micro.copyWith(color: colors.mutedForeground)),
+          Text(
+            context.l10n.presetSummary('${p.maxTurns}', '${p.tools.length}'),
+            style: text.micro.copyWith(color: colors.mutedForeground),
+          ),
         ],
       ),
     );
@@ -446,20 +499,22 @@ class _PresetsDetailState extends State<_PresetsDetail> {
             maxLines: 3,
             decoration: InputDecoration(labelText: context.l10n.systemPrompt),
             onChanged: (v) => _edit = Preset(
-                id: _edit.id,
-                systemPrompt: v,
-                tools: _edit.tools,
-                maxTurns: _edit.maxTurns),
+              id: _edit.id,
+              systemPrompt: v,
+              tools: _edit.tools,
+              maxTurns: _edit.maxTurns,
+            ),
           ),
           TextField(
             controller: _maxTurnsCtrl,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(labelText: context.l10n.maxTurns),
             onChanged: (v) => _edit = Preset(
-                id: _edit.id,
-                systemPrompt: _edit.systemPrompt,
-                tools: _edit.tools,
-                maxTurns: int.tryParse(v) ?? 30),
+              id: _edit.id,
+              systemPrompt: _edit.systemPrompt,
+              tools: _edit.tools,
+              maxTurns: int.tryParse(v) ?? 30,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
@@ -477,11 +532,14 @@ class _PresetsDetailState extends State<_PresetsDetail> {
                     } else {
                       tools.remove(t);
                     }
-                    setState(() => _edit = Preset(
+                    setState(
+                      () => _edit = Preset(
                         id: _edit.id,
                         systemPrompt: _edit.systemPrompt,
                         tools: tools,
-                        maxTurns: _edit.maxTurns));
+                        maxTurns: _edit.maxTurns,
+                      ),
+                    );
                   },
                 ),
             ],
@@ -490,8 +548,7 @@ class _PresetsDetailState extends State<_PresetsDetail> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              FilledButton(
-                  onPressed: _save, child: Text(context.l10n.save)),
+              FilledButton(onPressed: _save, child: Text(context.l10n.save)),
             ],
           ),
         ],
@@ -514,18 +571,19 @@ class _PresetsDetailState extends State<_PresetsDetail> {
                 child: TextField(
                   controller: _newId,
                   autofocus: true,
-                  decoration: InputDecoration(
-                      labelText: context.l10n.presetId),
+                  decoration: InputDecoration(labelText: context.l10n.presetId),
                   onSubmitted: (_) => _create(),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               FilledButton(
-                  onPressed: _newId.text.trim().isEmpty ? null : _create,
-                  child: Text(context.l10n.create)),
+                onPressed: _newId.text.trim().isEmpty ? null : _create,
+                child: Text(context.l10n.create),
+              ),
               IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  onPressed: () => setState(() => _showNew = false)),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                onPressed: () => setState(() => _showNew = false),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -552,32 +610,48 @@ class _PresetsDetailState extends State<_PresetsDetail> {
                         const SizedBox(width: AppSpacing.xs),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1),
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: colors.warning.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(999),
                           ),
-                          child: Text(context.l10n.systemPresetBadge,
-                              style: text.micro.copyWith(
-                                  color: colors.warning, fontSize: 9)),
+                          child: Text(
+                            context.l10n.systemPresetBadge,
+                            style: text.micro.copyWith(
+                              color: colors.warning,
+                              fontSize: 9,
+                            ),
+                          ),
                         ),
                       ],
                     ],
                   ),
-                  subtitle: Text(context.l10n.presetSummary('${p.maxTurns}',
-                        '${p.tools.length}')),
+                  subtitle: Text(
+                    context.l10n.presetSummary(
+                      '${p.maxTurns}',
+                      '${p.tools.length}',
+                    ),
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // System presets are immutable — no delete/edit.
                       if (!p.isSystem)
                         IconButton(
-                          icon: Icon(Icons.delete_outline_rounded,
-                              size: 18, color: colors.mutedForeground),
+                          icon: Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: colors.mutedForeground,
+                          ),
                           onPressed: () => _delete(p),
                         ),
-                      Icon(Icons.expand_more_rounded,
-                          size: 18, color: colors.mutedForeground),
+                      Icon(
+                        Icons.expand_more_rounded,
+                        size: 18,
+                        color: colors.mutedForeground,
+                      ),
                     ],
                   ),
                   onTap: () => _editingId == p.id
@@ -585,17 +659,18 @@ class _PresetsDetailState extends State<_PresetsDetail> {
                       : _open(p),
                 ),
                 if (_editingId == p.id)
-                  p.isSystem
-                      ? _systemPresetView(p)
-                      : _presetEditView(p),
+                  p.isSystem ? _systemPresetView(p) : _presetEditView(p),
               ],
             ),
           ),
         if (_presets.isEmpty)
           Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              child: Text(context.l10n.noPresets,
-                  style: TextStyle(color: colors.mutedForeground))),
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Text(
+              context.l10n.noPresets,
+              style: TextStyle(color: colors.mutedForeground),
+            ),
+          ),
       ],
     );
   }
@@ -630,7 +705,8 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     setState(() => _loading = true);
     try {
       _tools = await widget.api.tools(
-          locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh));
+        locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
+      );
     } catch (_) {}
     try {
       _config = await widget.api.toolConfig();
@@ -655,11 +731,14 @@ class _ToolsDetailState extends State<_ToolsDetail> {
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         for (final entry in cats.entries) ...[
-          Text(entry.key.toUpperCase(),
-              style: textOf(context).micro.copyWith(
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1,
-                  color: colorsOf(context).mutedForeground)),
+          Text(
+            entry.key.toUpperCase(),
+            style: textOf(context).micro.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+              color: colorsOf(context).mutedForeground,
+            ),
+          ),
           for (final t in entry.value) _toolCard(t),
         ],
       ],
@@ -687,22 +766,27 @@ class _ToolsDetailState extends State<_ToolsDetail> {
           ListTile(
             title: Text(tool.name, style: text.mono.copyWith(fontSize: 12)),
             trailing: extConfigs.isEmpty
-                ? Text(context.l10n.noConfig,
-                    style: text.micro.copyWith(color: colors.mutedForeground))
+                ? Text(
+                    context.l10n.noConfig,
+                    style: text.micro.copyWith(color: colors.mutedForeground),
+                  )
                 : Text(
                     requiredMissing
                         ? context.l10n.requiredConfig
                         : hasConfig
-                            ? context.l10n.configured
-                            : context.l10n.needsConfig,
+                        ? context.l10n.configured
+                        : context.l10n.needsConfig,
                     style: text.micro.copyWith(
-                        color: requiredMissing
-                            ? colors.destructive
-                            : hasConfig
-                                ? colors.success
-                                : colors.warning)),
+                      color: requiredMissing
+                          ? colors.destructive
+                          : hasConfig
+                          ? colors.success
+                          : colors.warning,
+                    ),
+                  ),
             onTap: () => setState(
-                () => _expanded = _expanded == tool.name ? null : tool.name),
+              () => _expanded = _expanded == tool.name ? null : tool.name,
+            ),
           ),
           if (_expanded == tool.name)
             Padding(
@@ -711,9 +795,10 @@ class _ToolsDetailState extends State<_ToolsDetail> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (tool.description.isNotEmpty)
-                    Text(tool.description,
-                        style: text.micro
-                            .copyWith(color: colors.mutedForeground)),
+                    Text(
+                      tool.description,
+                      style: text.micro.copyWith(color: colors.mutedForeground),
+                    ),
                   // Data-driven config editors from the extension config.
                   // Every knob renders a plain text field the user fills in
                   // (model refs like vlm_model / image_model are free-form
@@ -721,9 +806,13 @@ class _ToolsDetailState extends State<_ToolsDetail> {
                   for (final c in extConfigs) _extConfigEditor(tool, c),
                   if (tool.params.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.sm),
-                    Text(context.l10n.toolParams,
-                        style: text.meta.copyWith(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(
+                      context.l10n.toolParams,
+                      style: text.meta.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.xs),
                     _paramList(tool.params, 0),
                   ],
@@ -740,9 +829,7 @@ class _ToolsDetailState extends State<_ToolsDetail> {
   Widget _paramList(List<ToolParam> params, int depth) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final p in params) _paramRow(p, depth),
-      ],
+      children: [for (final p in params) _paramRow(p, depth)],
     );
   }
 
@@ -761,9 +848,10 @@ class _ToolsDetailState extends State<_ToolsDetail> {
               Text(
                 p.required ? '${p.name} *' : p.name,
                 style: text.mono.copyWith(
-                    fontSize: 12,
-                    color: p.required ? colors.primary : null,
-                    fontWeight: p.required ? FontWeight.w600 : null),
+                  fontSize: 12,
+                  color: p.required ? colors.primary : null,
+                  fontWeight: p.required ? FontWeight.w600 : null,
+                ),
               ),
               const SizedBox(width: AppSpacing.xs),
               if (p.enumValues != null)
@@ -772,16 +860,20 @@ class _ToolsDetailState extends State<_ToolsDetail> {
                   style: text.micro.copyWith(color: colors.mutedForeground),
                 )
               else
-                Text(p.type,
-                    style: text.micro.copyWith(color: colors.mutedForeground)),
+                Text(
+                  p.type,
+                  style: text.micro.copyWith(color: colors.mutedForeground),
+                ),
             ],
           ),
         ),
         if (p.description.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(left: depth * 16.0, top: 1),
-            child: Text(p.description,
-                style: text.micro.copyWith(color: colors.mutedForeground)),
+            child: Text(
+              p.description,
+              style: text.micro.copyWith(color: colors.mutedForeground),
+            ),
           ),
         if (p.children.isNotEmpty)
           _FoldGroup(children: p.children, depth: depth + 1),
@@ -846,12 +938,16 @@ class _ToolsDetailState extends State<_ToolsDetail> {
       });
       messenger.showSnackBar(SnackBar(content: Text(context.l10n.saved)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-          content: Text('$e',
-              style: TextStyle(color: colorsOf(context).destructive))));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '$e',
+            style: TextStyle(color: colorsOf(context).destructive),
+          ),
+        ),
+      );
     }
   }
-
 }
 
 /// Provider/model dropdown for a generation-model config knob. Lists only
@@ -909,32 +1005,43 @@ class _GenerativeModelPickerState extends State<_GenerativeModelPicker> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.description.isNotEmpty)
-            Text(widget.description,
-                style: text.micro.copyWith(color: colors.mutedForeground)),
+            Text(
+              widget.description,
+              style: text.micro.copyWith(color: colors.mutedForeground),
+            ),
           DropdownButtonFormField<String>(
             // An unknown stored ref (provider deleted) still shows, so the
             // user sees the stale value instead of a silent reset.
-            initialValue: valid ? (_selected.isEmpty ? null : _selected) : _selected,
+            initialValue: valid
+                ? (_selected.isEmpty ? null : _selected)
+                : _selected,
             decoration: InputDecoration(
               labelText: widget.label,
               prefixIcon: _selected.isEmpty
                   ? null
-                  : Icon(Icons.check_circle_rounded,
-                      size: 18, color: colors.success),
+                  : Icon(
+                      Icons.check_circle_rounded,
+                      size: 18,
+                      color: colors.success,
+                    ),
             ),
             items: [
               DropdownMenuItem(value: '', child: Text(context.l10n.none)),
               for (final (ref, name) in refs)
                 DropdownMenuItem(
-                    value: ref, child: Text(name == ref ? ref : '$name —— $ref')),
+                  value: ref,
+                  child: Text(name == ref ? ref : '$name —— $ref'),
+                ),
             ],
             onChanged: (v) => setState(() => _selected = v ?? ''),
           ),
           if (refs.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(context.l10n.selectProviderFirst,
-                  style: text.micro.copyWith(color: colors.mutedForeground)),
+              child: Text(
+                context.l10n.selectProviderFirst,
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
             ),
           const SizedBox(height: AppSpacing.xs),
           Align(
@@ -971,8 +1078,9 @@ class _ConfigTextField extends StatefulWidget {
 }
 
 class _ConfigTextFieldState extends State<_ConfigTextField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialValue);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
 
   @override
   void didUpdateWidget(covariant _ConfigTextField oldWidget) {
@@ -1002,8 +1110,10 @@ class _ConfigTextFieldState extends State<_ConfigTextField> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.description.isNotEmpty)
-            Text(widget.description,
-                style: text.micro.copyWith(color: colors.mutedForeground)),
+            Text(
+              widget.description,
+              style: text.micro.copyWith(color: colors.mutedForeground),
+            ),
           TextField(
             controller: _controller,
             decoration: InputDecoration(
@@ -1011,8 +1121,11 @@ class _ConfigTextFieldState extends State<_ConfigTextField> {
               // A configured knob is visually flagged so the user can tell
               // "set" from "empty" at a glance.
               prefixIcon: hasValue
-                  ? Icon(Icons.check_circle_rounded,
-                      size: 18, color: colors.success)
+                  ? Icon(
+                      Icons.check_circle_rounded,
+                      size: 18,
+                      color: colors.success,
+                    )
                   : null,
             ),
             onChanged: (_) => setState(() {}),
@@ -1063,19 +1176,20 @@ class _FoldGroupState extends State<_FoldGroup> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                    _open
-                        ? Icons.keyboard_arrow_down_rounded
-                        : Icons.keyboard_arrow_right_rounded,
-                    size: 14,
-                    color: colors.mutedForeground),
+                  _open
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.keyboard_arrow_right_rounded,
+                  size: 14,
+                  color: colors.mutedForeground,
+                ),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
-                    _open
-                        ? '${context.l10n.showLess} (${widget.children.length})'
-                        : '${context.l10n.showMore} (${widget.children.length})',
-                    style: textOf(context)
-                        .micro
-                        .copyWith(color: colors.mutedForeground)),
+                  _open
+                      ? '${context.l10n.showLess} (${widget.children.length})'
+                      : '${context.l10n.showMore} (${widget.children.length})',
+                  style: textOf(context).micro
+                      .copyWith(color: colors.mutedForeground),
+                ),
               ],
             ),
           ),
@@ -1092,9 +1206,7 @@ class _FoldGroupState extends State<_FoldGroup> {
       padding: EdgeInsets.only(left: (widget.depth) * 16.0, top: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final p in widget.children) _childRow(p),
-        ],
+        children: [for (final p in widget.children) _childRow(p)],
       ),
     );
   }
@@ -1113,19 +1225,23 @@ class _FoldGroupState extends State<_FoldGroup> {
               Text(
                 p.required ? '${p.name} *' : p.name,
                 style: text.mono.copyWith(
-                    fontSize: 12,
-                    color: p.required ? colors.primary : null,
-                    fontWeight: p.required ? FontWeight.w600 : null),
+                  fontSize: 12,
+                  color: p.required ? colors.primary : null,
+                  fontWeight: p.required ? FontWeight.w600 : null,
+                ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              Text(p.type,
-                  style:
-                      text.micro.copyWith(color: colors.mutedForeground)),
+              Text(
+                p.type,
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
             ],
           ),
           if (p.description.isNotEmpty)
-            Text(p.description,
-                style: text.micro.copyWith(color: colors.mutedForeground)),
+            Text(
+              p.description,
+              style: text.micro.copyWith(color: colors.mutedForeground),
+            ),
           if (p.children.isNotEmpty)
             _FoldGroup(children: p.children, depth: widget.depth + 1),
         ],
@@ -1133,6 +1249,7 @@ class _FoldGroupState extends State<_FoldGroup> {
     );
   }
 }
+
 /// Backend manager rendered as a config drill-in (right panel on tablets).
 /// Owns its backend list state; switch/delete operate on [Prefs].
 class _BackendsDetail extends StatefulWidget {
@@ -1175,23 +1292,32 @@ class _BackendsDetailState extends State<_BackendsDetail> {
         if (_backends.isEmpty)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: Text(context.l10n.noSavedBackends,
-                style: TextStyle(color: colors.mutedForeground)),
+            child: Text(
+              context.l10n.noSavedBackends,
+              style: TextStyle(color: colors.mutedForeground),
+            ),
           ),
         for (final b in _backends)
           Card(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: ListTile(
-              leading: const Icon(Icons.dns_outlined,
-                  color: Colors.greenAccent),
+              leading: const Icon(
+                Icons.dns_outlined,
+                color: Colors.greenAccent,
+              ),
               title: Text(b.name.isNotEmpty ? b.name : b.baseUrl),
-              subtitle: Text(b.baseUrl,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.micro.copyWith(color: colors.mutedForeground)),
+              subtitle: Text(
+                b.baseUrl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
               trailing: IconButton(
-                icon: Icon(Icons.delete_outline_rounded,
-                    size: 18, color: colors.mutedForeground),
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: colors.mutedForeground,
+                ),
                 tooltip: context.l10n.deleteBackend,
                 onPressed: () => _delete(b),
               ),
@@ -1203,8 +1329,8 @@ class _BackendsDetailState extends State<_BackendsDetail> {
           leading: const Icon(Icons.add_rounded),
           title: Text(context.l10n.addBackend),
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(context.l10n.addBackend)));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(context.l10n.addBackend)));
           },
         ),
       ],
