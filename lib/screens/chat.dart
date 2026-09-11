@@ -32,6 +32,11 @@ class ChatSessionPageWidget extends StatefulWidget {
 
 class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   AppStore get store => widget.store;
+
+  /// Height shared by the text field (single line) and the hold-to-talk
+  /// button, so toggling voice/keyboard mode never resizes the composer.
+  static const double _composerFieldHeight = 42;
+
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _inputFocus = FocusNode();
@@ -551,22 +556,10 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 ),
                 const SizedBox(width: AppSpacing.sm),
               ],
-              // Session name → tap/hover opens an info popover (provider /
+              // Session name → tap opens a centered info dialog (provider /
               // model / preset / agent language) with an Edit action.
-              Expanded(
-                child: _SessionInfoAnchor(
-                  session: s,
-                  onEdit: _showSettings,
-                  child: Text(
-                    s?.id ?? context.l10n.chatTitle,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.meta.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colors.foreground,
-                    ),
-                  ),
-                ),
-              ),
+              _SessionNamePill(session: s, onEdit: _showSettings),
+              const Spacer(),
               PopupMenuButton<String>(
                 onSelected: (v) => _menuAction(v),
                 itemBuilder: (context) => [
@@ -1010,19 +1003,32 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                   Expanded(
                     child: _voiceMode
                         ? _holdToTalkButton(context)
-                        : TextField(
-                            controller: _input,
-                            focusNode: _inputFocus,
-                            // Keep typing while the agent works (IM convention);
-                            // only the send/plus button morphs.
-                            minLines: 1,
-                            maxLines: 6,
-                            textInputAction: TextInputAction.newline,
-                            onChanged: (_) => setState(() {}),
-                            decoration: InputDecoration(
-                              hintText: _pendingAttachments.isEmpty
-                                  ? context.l10n.typeMessage
-                                  : '',
+                        : ConstrainedBox(
+                            // Same box height as the hold-to-talk button so
+                            // toggling voice/keyboard does not resize the bar.
+                            constraints: const BoxConstraints(
+                              minHeight: _composerFieldHeight,
+                            ),
+                            child: TextField(
+                              controller: _input,
+                              focusNode: _inputFocus,
+                              // Keep typing while the agent works (IM convention);
+                              // only the send/plus button morphs.
+                              minLines: 1,
+                              maxLines: 6,
+                              textInputAction: TextInputAction.newline,
+                              textAlignVertical: TextAlignVertical.center,
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.md,
+                                  vertical: 0,
+                                ),
+                                hintText: _pendingAttachments.isEmpty
+                                    ? context.l10n.typeMessage
+                                    : '',
+                              ),
                             ),
                           ),
                   ),
@@ -1069,13 +1075,15 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       onLongPressEnd: (_) => _stopRecording(),
       onLongPressCancel: _cancelRecording,
       child: Container(
-        height: 42,
+        height: _composerFieldHeight,
         alignment: Alignment.center,
         decoration: BoxDecoration(
+          // Match the text field's fill + radius so switching voice/keyboard
+          // mode only swaps the content, not the shape.
           color: _recording
-              ? colors.destructive.withValues(alpha: 0.15)
-              : colors.muted.withValues(alpha: 0.4),
-          borderRadius: AppRadius.rSm,
+              ? colors.destructive.withValues(alpha: 0.12)
+              : colors.muted,
+          borderRadius: AppRadius.rMd,
           border: Border.all(
             color: _recording
                 ? colors.destructive
@@ -1102,142 +1110,164 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   }
 }
 
-/// Anchors a small info popover to a child (the session name). Opens on tap
-/// (mobile) and on hover (desktop); the popover lists the session's provider /
-/// model / preset / agent language and offers an Edit action that opens the
-/// full session-settings dialog.
-class _SessionInfoAnchor extends StatefulWidget {
+/// Fixed-width session-name pill. Shows the session name, ellipsized when it
+/// overflows; tapping opens a centered session-info dialog (provider / model /
+/// preset / agent language) with an Edit action into the settings dialog.
+class _SessionNamePill extends StatelessWidget {
   final Session? session;
-  final Widget child;
   final VoidCallback onEdit;
-  const _SessionInfoAnchor({
-    required this.session,
-    required this.child,
-    required this.onEdit,
-  });
-
-  @override
-  State<_SessionInfoAnchor> createState() => _SessionInfoAnchorState();
-}
-
-class _SessionInfoAnchorState extends State<_SessionInfoAnchor> {
-  final OverlayPortalController _ctrl = OverlayPortalController();
-  final LayerLink _link = LayerLink();
-  Timer? _closeTimer;
-
-  void _toggle() => _ctrl.isShowing ? _ctrl.hide() : _ctrl.show();
-
-  // Grace period so the pointer can travel from the name into the popover
-  // (which lives in a separate overlay) without it vanishing.
-  void _scheduleClose() {
-    _closeTimer?.cancel();
-    _closeTimer = Timer(const Duration(milliseconds: 220), () {
-      if (mounted) _ctrl.hide();
-    });
-  }
-
-  void _cancelClose() => _closeTimer?.cancel();
-
-  @override
-  void dispose() {
-    _closeTimer?.cancel();
-    super.dispose();
-  }
+  const _SessionNamePill({required this.session, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _link,
-      child: OverlayPortal(
-        controller: _ctrl,
-        overlayChildBuilder: (context) => _popover(context),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) {
-            _cancelClose();
-            _ctrl.show();
-          },
-          onExit: (_) => _scheduleClose(),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggle,
-            child: widget.child,
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return ConstrainedBox(
+      // Fixed pill length; long names get an ellipsis.
+      constraints: const BoxConstraints(maxWidth: 160, minWidth: 96),
+      child: Material(
+        color: colors.muted.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () => _show(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 4,
+            ),
+            child: Text(
+              session?.id ?? context.l10n.chatTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: text.meta.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.foreground,
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _popover(BuildContext context) {
+  void _show(BuildContext context) {
+    final s = session;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _SessionInfoDialog(session: s, onEdit: onEdit),
+    );
+  }
+}
+
+/// Centered session-info dialog: a tidy label/value card with an Edit action.
+class _SessionInfoDialog extends StatelessWidget {
+  final Session? session;
+  final VoidCallback onEdit;
+  const _SessionInfoDialog({required this.session, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
-    final s = widget.session;
+    final s = session;
     final modelRef = s?.model ?? '';
     final slash = modelRef.indexOf('/');
     final provider = slash > 0 ? modelRef.substring(0, slash) : '';
     final model = slash > 0 ? modelRef.substring(slash + 1) : modelRef;
-    final locale = s?.locale ?? '';
-    String row(String label, String value) =>
-        value.isEmpty ? '' : '$label: $value\n';
-    final body = StringBuffer()
-      ..write(row(context.l10n.providers, provider))
-      ..write(row(context.l10n.modelLabel, model))
-      ..write(row(context.l10n.presetLabel, s?.preset ?? ''))
-      ..write(
-        row(
-          context.l10n.agentLocale,
-          locale.isEmpty ? context.l10n.agentLocaleFollow : locale,
-        ),
-      );
-    return CompositedTransformFollower(
-      link: _link,
-      targetAnchor: Alignment.bottomLeft,
-      followerAnchor: Alignment.topLeft,
-      showWhenUnlinked: false,
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: MouseRegion(
-          onEnter: (_) => _cancelClose(),
-          onExit: (_) => _scheduleClose(),
-          child: Material(
-            color: colors.card,
-            elevation: 6,
-            borderRadius: AppRadius.rMd,
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 280),
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.rMd,
-                border: Border.all(color: colors.border.withValues(alpha: 0.6)),
-              ),
-              child: Column(
+    final locale = (s?.locale ?? '').isEmpty
+        ? context.l10n.agentLocaleFollow
+        : s!.locale!;
+
+    final rows = <(String, String)>[
+      (context.l10n.providers, provider),
+      (context.l10n.modelLabel, model),
+      (context.l10n.presetLabel, s?.preset ?? ''),
+      (context.l10n.agentLocale, locale),
+    ].where((r) => r.$2.isNotEmpty).toList();
+
+    return AlertDialog(
+      titlePadding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      title: Row(
+        children: [
+          Icon(
+            Icons.chat_bubble_outline_rounded,
+            size: 18,
+            color: colors.primary,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              s?.id ?? context.l10n.chatTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.meta.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, color: colors.border.withValues(alpha: 0.4)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    body.toString().trimRight(),
-                    style: text.micro.copyWith(color: colors.foreground),
+                  SizedBox(
+                    width: 96,
+                    child: Text(
+                      rows[i].$1,
+                      style: text.micro.copyWith(color: colors.mutedForeground),
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.tonal(
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onPressed: () {
-                        _ctrl.hide();
-                        widget.onEdit();
-                      },
-                      child: Text(context.l10n.edit),
+                  Expanded(
+                    child: Text(
+                      rows[i].$2,
+                      style: text.meta.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
+          ],
+        ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.l10n.cancel),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: () {
+            Navigator.pop(context);
+            onEdit();
+          },
+          icon: const Icon(Icons.edit_outlined, size: 16),
+          label: Text(context.l10n.edit),
+        ),
+      ],
     );
   }
 }
