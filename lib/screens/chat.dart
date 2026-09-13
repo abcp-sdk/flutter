@@ -1584,16 +1584,23 @@ class _SessionInfoDialog extends StatelessWidget {
     final colors = colorsOf(context);
     final text = textOf(context);
     final s = session;
-    final modelRef = s?.model ?? '';
+    final none = context.l10n.none;
+    final modelRef = (s?.model ?? '').isEmpty ? none : s!.model;
+    final variant = (s?.variant ?? '').isEmpty
+        ? context.l10n.variantNone
+        : s!.variant;
+    final preset = (s?.preset ?? '').isEmpty ? none : s!.preset;
     final locale = (s?.locale ?? '').isEmpty
         ? context.l10n.agentLocaleFollow
         : s!.locale!;
 
+    // EVERY row is shown, with a placeholder when unset (no silent omission).
     final rows = <(String, String)>[
       (context.l10n.modelLabel, modelRef),
-      (context.l10n.presetLabel, s?.preset ?? ''),
+      (context.l10n.variantLabel, variant),
+      (context.l10n.presetLabel, preset),
       (context.l10n.agentLocale, locale),
-    ].where((r) => r.$2.isNotEmpty).toList();
+    ];
 
     return AlertDialog(
       titlePadding: const EdgeInsets.fromLTRB(

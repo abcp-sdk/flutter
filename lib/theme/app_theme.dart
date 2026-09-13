@@ -187,7 +187,9 @@ class AppTypography extends ThemeExtension<AppTypography> {
   static AppTypography of(Brightness brightness) {
     final base = TextStyle(
       fontFamily: 'NotoSansSC',
-      fontFamilyFallback: const ['monospace'],
+      // Emoji must be an explicit fallback: the web build ships its own emoji
+      // font and no longer relies on the engine's gstatic fallback service.
+      fontFamilyFallback: const ['NotoColorEmoji', 'monospace'],
       color: brightness == Brightness.dark
           ? AppColors.dark.foreground
           : AppColors.light.foreground,
@@ -269,6 +271,9 @@ ThemeData buildAppTheme(Brightness brightness) {
     colorScheme: scheme,
     scaffoldBackgroundColor: c.background,
     fontFamily: 'NotoSansSC',
+    // Keep the bundled emoji font in the fallback chain for default text
+    // styles too (ThemeData.fontFamily alone does not add fallbacks).
+    fontFamilyFallback: const ['NotoColorEmoji'],
     extensions: [c, ty],
     visualDensity: VisualDensity.standard,
     splashFactory: InkSparkle.splashFactory,

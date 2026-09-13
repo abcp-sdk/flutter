@@ -1,7 +1,7 @@
 name: agent_app
 description: "Standalone agent chat client (agent.v1.AgentService via easylab SDK surface)."
 publish_to: 'none'
-version: 0.1.0+63
+version: 0.1.0+64
 
 environment:
   sdk: ^3.13.2
@@ -60,3 +60,9 @@ flutter:
     - family: NotoSansSC
       fonts:
         - asset: assets/fonts/NotoSansSC.ttf
+    # Bundled emoji font (CBDT color): on the web there is no system font to
+    # fall back to, and the engine's remote fallback service is deliberately
+    # disabled (no gstatic dependency), so emoji must ship with the app.
+    - family: NotoColorEmoji
+      fonts:
+        - asset: assets/fonts/NotoColorEmoji.ttf
