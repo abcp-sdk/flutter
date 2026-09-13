@@ -1157,4 +1157,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signInAgain => 'Sign in again';
+
+  @override
+  String get defaults => 'Defaults';
+
+  @override
+  String get defaultsHint =>
+      'Applied automatically to new sessions (empty = built-in default)';
+
+  @override
+  String get defaultModel => 'Default model';
+
+  @override
+  String get defaultPreset => 'Default preset';
 }

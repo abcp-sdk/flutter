@@ -657,5 +657,9 @@
   "gatewayMultimodalModelsHint": "添加图像/视频/语音/转写模型（无上下文长度）。",
   "authExpiredTitle": "认证失败",
   "authExpiredBody": "服务器拒绝了请求：令牌缺失、无效或已被吊销。请在连接设置中更新令牌后重试。",
-  "signInAgain": "重新登录"
+  "signInAgain": "重新登录",
+  "defaults": "默认项",
+  "defaultsHint": "新建会话时自动使用（留空则用内置 default）",
+  "defaultModel": "默认模型",
+  "defaultPreset": "默认预设"
 }

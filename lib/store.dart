@@ -281,6 +281,16 @@ class AppStore extends ChangeNotifier {
     local?.saveDraft(sessionId, '', const []);
   }
 
+  /// Bumped when a provider is registered/removed so the providers list can
+  /// reload — WITHOUT reloading on every unrelated store notification (stream
+  /// deltas, draft saves, navigation), which used to refetch on every event.
+  int providersRevision = 0;
+
+  void bumpProvidersRevision() {
+    providersRevision += 1;
+    notifyListeners();
+  }
+
   void beginProviderDraft(ProviderInfo? existing) {
     providerDraft = existing == null
         ? ProviderDraft(apiType: 'openai-compatible')

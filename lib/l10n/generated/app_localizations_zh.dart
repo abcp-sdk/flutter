@@ -1145,4 +1145,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get signInAgain => '重新登录';
+
+  @override
+  String get defaults => '默认项';
+
+  @override
+  String get defaultsHint => '新建会话时自动使用（留空则用内置 default）';
+
+  @override
+  String get defaultModel => '默认模型';
+
+  @override
+  String get defaultPreset => '默认预设';
 }

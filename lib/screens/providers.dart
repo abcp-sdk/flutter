@@ -136,9 +136,15 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
     super.dispose();
   }
 
+  int _seenProvidersRevision = 0;
+
   void _onStore() {
     if (!mounted) return;
     setState(() {});
+    // Only refetch when a provider actually changed — not on every store
+    // notification (message deltas, drafts, navigation all notify).
+    if (store.providersRevision == _seenProvidersRevision) return;
+    _seenProvidersRevision = store.providersRevision;
     if (_providersLoading) return;
     _reload();
   }
@@ -414,6 +420,7 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
           models: d.models,
         ),
       );
+      store.bumpProvidersRevision();
       store.endProviderDraft();
       showToast(context, context.l10n.saved);
       store.popPage();
@@ -657,6 +664,7 @@ class _GatewayFormScreenState extends State<GatewayFormScreen> {
           models: d.models,
         ),
       );
+      store.bumpProvidersRevision();
       store.endProviderDraft();
       showToast(context, context.l10n.saved);
       store.popPage();

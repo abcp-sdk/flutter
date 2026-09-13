@@ -2197,6 +2197,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'重新登录'**
   String get signInAgain;
+
+  /// No description provided for @defaults.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认项'**
+  String get defaults;
+
+  /// No description provided for @defaultsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建会话时自动使用（留空则用内置 default）'**
+  String get defaultsHint;
+
+  /// No description provided for @defaultModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认模型'**
+  String get defaultModel;
+
+  /// No description provided for @defaultPreset.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认预设'**
+  String get defaultPreset;
 }
 
 class _AppLocalizationsDelegate

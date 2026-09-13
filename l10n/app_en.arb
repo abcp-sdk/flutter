@@ -664,5 +664,9 @@
   "gatewayMultimodalModelsHint": "Add image/video/speech/transcription models (no context length).",
   "authExpiredTitle": "Sign-in required",
   "authExpiredBody": "The server rejected the request: the token is missing, invalid, or revoked. Update the connection token and try again.",
-  "signInAgain": "Sign in again"
+  "signInAgain": "Sign in again",
+  "defaults": "Defaults",
+  "defaultsHint": "Applied automatically to new sessions (empty = built-in default)",
+  "defaultModel": "Default model",
+  "defaultPreset": "Default preset"
 }

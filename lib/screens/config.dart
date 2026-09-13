@@ -9,6 +9,7 @@ import '../prefs.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dialogs.dart';
+import 'defaults.dart';
 import 'providers.dart';
 
 /// Recreates ConfigPage.svelte (simplified, without the external
@@ -101,6 +102,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return context.l10n.tools;
       case 'backends':
         return context.l10n.backendsTitle;
+      case 'defaults':
+        return context.l10n.defaults;
       default:
         return id;
     }
@@ -154,6 +157,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
           Icons.auto_awesome_outlined,
           'presets',
           () => _push('presets'),
+        ),
+        _listTile(
+          context,
+          Icons.star_outline_rounded,
+          'defaults',
+          () => _push('defaults'),
         ),
         _SectionHeader(context.l10n.workspace),
         _listTile(
@@ -260,6 +269,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return _providersDetail();
       case 'presets':
         return _presetsDetail();
+      case 'defaults':
+        return DefaultsDetail(api: store.api);
       case 'tools':
         return _toolsDetail();
       case 'backends':

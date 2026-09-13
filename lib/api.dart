@@ -119,22 +119,30 @@ class AgentBindApi {
   }
 
   Future<Session> createSession(Map<String, dynamic> params) async {
-    final r = await _agent.createSession(sdk.CreateSessionRequest(
-      name: (params['name'] as String?) ?? '',
-      model: (params['model'] as String?) ?? '',
-      variant: (params['variant'] as String?) ?? '',
-      preset: (params['preset'] as String?) ?? '',
-      org: (params['org'] as String?) ?? '',
-      repo: (params['repo'] as String?) ?? '',
-      branch: (params['branch'] as String?) ?? '',
-    ));
+    // Only forward fields the caller actually set: an empty string would
+    // otherwise be written verbatim (and the agent now treats empty
+    // preset/model as "apply the tenant default").
+    final req = sdk.CreateSessionRequest(name: (params['name'] as String?) ?? '');
+    final model = (params['model'] as String?) ?? '';
+    if (model.isNotEmpty) req.model = model;
+    final variant = (params['variant'] as String?) ?? '';
+    if (variant.isNotEmpty) req.variant = variant;
+    final preset = (params['preset'] as String?) ?? '';
+    if (preset.isNotEmpty) req.preset = preset;
+    final org = (params['org'] as String?) ?? '';
+    if (org.isNotEmpty) req.org = org;
+    final repo = (params['repo'] as String?) ?? '';
+    if (repo.isNotEmpty) req.repo = repo;
+    final branch = (params['branch'] as String?) ?? '';
+    if (branch.isNotEmpty) req.branch = branch;
+    final r = await _agent.createSession(req);
     return Session(
       id: r.sessionName,
-      model: (params['model'] as String?) ?? '',
-      variant: (params['variant'] as String?) ?? '',
-      org: (params['org'] as String?) ?? '',
-      repo: (params['repo'] as String?) ?? '',
-      branch: (params['branch'] as String?) ?? '',
+      model: model,
+      variant: variant,
+      org: org,
+      repo: repo,
+      branch: branch,
     );
   }
 
@@ -239,14 +247,18 @@ class AgentBindApi {
     // max_turns is optional: only set it when explicitly provided (>0),
     // otherwise the update omits it (inherit from preset/default).
     final maxTurns = settings['max_turns'] as int?;
-    final req = sdk.UpdateSettingsRequest(
-      id: id,
-      model: (settings['model'] as String?) ?? '',
-      preset: (settings['preset'] as String?) ?? '',
-      systemPrompt: (settings['system_prompt'] as String?) ?? '',
-      locale: (settings['locale'] as String?) ?? '',
-      variant: (settings['variant'] as String?) ?? '',
-    );
+    final req = sdk.UpdateSettingsRequest(id: id);
+    // Only forward non-empty model/preset: empty means "leave unchanged" (the
+    // agent also rejects blank values on the update path). Other settings use
+    // the sentinel '' to clear where that is meaningful (locale, variant,
+    // system_prompt).
+    final model = (settings['model'] as String?) ?? '';
+    if (model.isNotEmpty) req.model = model;
+    final preset = (settings['preset'] as String?) ?? '';
+    if (preset.isNotEmpty) req.preset = preset;
+    req.systemPrompt = (settings['system_prompt'] as String?) ?? '';
+    req.locale = (settings['locale'] as String?) ?? '';
+    req.variant = (settings['variant'] as String?) ?? '';
     if (maxTurns != null && maxTurns > 0) req.maxTurns = maxTurns;
     final r = await _agent.updateSettings(req);
     return _sessionFromSessionResults(r.session);
@@ -503,6 +515,12 @@ class AgentBindApi {
 
   Future<void> setConfigKey(String key, String value) =>
       _agent.setConfig(sdk.SetConfigRequest(key: key, value: value));
+
+  /// Read one agent config value for this tenant ('' when unset).
+  Future<String> config(String key) async {
+    final r = await _agent.getConfig(sdk.GetConfigRequest(key: key));
+    return r.value;
+  }
 
   Future<Session> sessionLocale(String id, String locale) =>
       settings(id, {'locale': locale});
