@@ -49,6 +49,9 @@ class ConfigScreen extends StatefulWidget {
 class _ConfigScreenState extends State<ConfigScreen> {
   AppStore get store => widget.store;
   bool _loading = true;
+  /// Lets the AppBar's "+" drive the presets detail's inline new-preset row,
+  /// mirroring the providers page (top-right action instead of a button).
+  final GlobalKey<_PresetsDetailState> _presetsKey = GlobalKey();
 
   @override
   void initState() {
@@ -81,6 +84,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
               )
             : null,
         title: Text(isDetail ? _titleOf(id) : context.l10n.tabConfig),
+        actions: [
+          if (isDetail && id == 'presets')
+            IconButton(
+              icon: const Icon(Icons.add_rounded),
+              tooltip: context.l10n.newPreset,
+              onPressed: () => _presetsKey.currentState?.startNew(),
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -300,7 +311,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Widget _presetsDetail() {
-    return _PresetsDetail(api: store.api);
+    return _PresetsDetail(key: _presetsKey, api: store.api);
   }
 
   Widget _toolsDetail() {
@@ -334,7 +345,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _PresetsDetail extends StatefulWidget {
   final AgentBindApi api;
-  const _PresetsDetail({required this.api});
+  const _PresetsDetail({super.key, required this.api});
 
   @override
   State<_PresetsDetail> createState() => _PresetsDetailState();
@@ -385,6 +396,12 @@ class _PresetsDetailState extends State<_PresetsDetail> {
       if (isAuthError(e)) showAuthExpiredDialog();
     }
     setState(() => _loading = false);
+  }
+
+  /// Reveal the inline new-preset row (driven by the AppBar "+").
+  void startNew() {
+    if (!mounted) return;
+    setState(() => _showNew = true);
   }
 
   Future<void> _create() async {
@@ -596,15 +613,7 @@ class _PresetsDetailState extends State<_PresetsDetail> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-        ] else
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: () => setState(() => _showNew = true),
-              icon: const Icon(Icons.add_rounded, size: 16),
-              label: Text(context.l10n.newPreset),
-            ),
-          ),
+        ],
         for (final p in _presets)
           Card(
             margin: const EdgeInsets.only(top: AppSpacing.sm),
