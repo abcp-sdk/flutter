@@ -1067,6 +1067,13 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     List<ModelInfo> allModels = [];
     List<ModelVariantInfo> variantsForModel = [];
     bool loadingModels = true;
+    // One-shot trigger + in-flight guard: the dialog builder runs on EVERY
+    // rebuild, so scheduling the initial load from inside it (even via a
+    // post-frame callback) re-armed a new load every frame while the first
+    // request was still in flight — an endless listModels storm. `started`
+    // fires the load exactly once; `inFlight` makes overlapping calls no-ops.
+    bool started = false;
+    bool inFlight = false;
     void syncVariants() {
       final sel = allModels.where((m) => modelRefOf(m) == selectedRef);
       variantsForModel = sel.isEmpty ? const [] : sel.first.variants;
@@ -1074,6 +1081,8 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     }
 
     Future<void> loadModels(void Function(void Function()) setState) async {
+      if (inFlight) return;
+      inFlight = true;
       setState(() => loadingModels = true);
       final out = <ModelInfo>[];
       for (final pid in providerIds) {
@@ -1081,6 +1090,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
           out.addAll(await store.api.models(providerId: pid));
         } catch (_) {}
       }
+      inFlight = false;
       if (!mounted) return;
       setState(() {
         allModels = out;
@@ -1097,10 +1107,11 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          if (loadingModels && allModels.isEmpty) {
-            // First open: kick off the initial model load once.
+          if (!started) {
+            // First build only: kick off the model load exactly once.
+            started = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (allModels.isEmpty) loadModels(setState);
+              if (mounted && allModels.isEmpty) loadModels(setState);
             });
           }
           final presetOptions = [
