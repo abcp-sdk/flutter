@@ -15,8 +15,8 @@ FORGEJO_PASS="${FORGEJO_PASS:-devpassword}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
-echo "==> flutter build web"
-(cd "${DIR}" && /home/user/flutter/bin/flutter build web --release)
+echo "==> flutter build web (no CDN: CanvasKit served locally, no gstatic)"
+(cd "${DIR}" && /home/user/flutter/bin/flutter build web --release --no-web-resources-cdn)
 
 echo "Building web image -> ${DEST}"
 buildctl --addr "${BUILDKIT}" build \

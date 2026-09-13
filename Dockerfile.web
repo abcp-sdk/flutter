@@ -18,6 +18,7 @@ RUN printf 'server {\n\
     location = /flutter_service_worker.js { add_header Cache-Control "no-cache"; }\n\
     location = /sqlite3.wasm { default_type application/wasm; add_header Cache-Control "no-cache"; }\n\
     location = /drift_worker.js { default_type application/javascript; add_header Cache-Control "no-cache"; }\n\
+    location ~ \\.wasm$ { default_type application/wasm; }\n\
     location / { try_files $uri $uri/ /index.html; }\n\
     location = /healthz { return 200 "{\\"ok\\":true,\\"name\\":\\"agent-web\\"}"; add_header Content-Type application/json; }\n\
 }\n' > /etc/nginx/http.d/default.conf

@@ -140,11 +140,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
           onTap: () => _push('backends'),
         ),
         _SectionHeader(context.l10n.llm),
+        // SIBLING like the other drill-ins: entering providers from the list
+        // replaces any open drill-in instead of stacking, so the tablet split
+        // shows `1 | 2` (list alongside providers), never `2 | 3`.
         _listTile(
           context,
           Icons.dns_outlined,
           'providers',
-          () => store.pushPage(const ProvidersListPage()),
+          () => store.pushSibling(const ProvidersListPage()),
         ),
         _listTile(
           context,

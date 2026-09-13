@@ -53,22 +53,36 @@ Widget buildPage(
         initialId: id,
       );
     case ProvidersListPage():
-      return ProvidersListScreen(key: ValueKey(page.key), store: store);
+      return ProvidersListScreen(
+        key: ValueKey(page.key),
+        store: store,
+        showBack: isTablet,
+      );
     case ProviderFormPage():
-      return ProviderFormScreen(key: ValueKey(page.key), store: store);
+      return ProviderFormScreen(
+        key: ValueKey(page.key),
+        store: store,
+        showBack: isTablet,
+      );
     case GatewayFormPage():
-      return GatewayFormScreen(key: ValueKey(page.key), store: store);
+      return GatewayFormScreen(
+        key: ValueKey(page.key),
+        store: store,
+        showBack: isTablet,
+      );
     case ProviderModelsPage(:final modelId):
       return ProviderModelScreen(
         key: ValueKey(page.key),
         store: store,
         modelId: modelId,
+        showBack: isTablet,
       );
     case GatewayModelPage(:final modelId):
       return GatewayModelScreen(
         key: ValueKey(page.key),
         store: store,
         modelId: modelId,
+        showBack: isTablet,
       );
   }
 }

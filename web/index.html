@@ -41,6 +41,19 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    // Point the engine's runtime fallback-font downloads (missing-glyph Noto
+    // fonts and the default Roboto) at a LOCAL base. The engine default is
+    // fonts.gstatic.com, which is unreachable on many mobile networks: the
+    // resulting font-fetch retry storm left the app blank/never-rendered on
+    // phones. Set BEFORE the bootstrap so the engine reads it during init.
+    // Unknown local paths 404 (harmless: the fallback service degrades
+    // gracefully), and NO request ever leaves for gstatic.
+    window.flutterConfiguration = Object.assign(
+      window.flutterConfiguration || {},
+      { fontFallbackBaseUrl: "fallback-fonts/s/" },
+    );
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

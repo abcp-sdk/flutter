@@ -109,7 +109,9 @@ String capabilityLabel(BuildContext context, String capability) {
 // ---------------------------------------------------------------------------
 class ProvidersListScreen extends StatefulWidget {
   final AppStore store;
-  const ProvidersListScreen({super.key, required this.store});
+  /// Whether this page is the top of the tablet split (show a back arrow).
+  final bool showBack;
+  const ProvidersListScreen({super.key, required this.store, this.showBack = true});
 
   @override
   State<ProvidersListScreen> createState() => _ProvidersListScreenState();
@@ -200,10 +202,12 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
     final hasGateway = all.any(isGatewayProvider);
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => store.popPage(),
-        ),
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => store.popPage(),
+              )
+            : null,
         title: Text(context.l10n.llmProviders),
         actions: [
           IconButton(
@@ -309,7 +313,8 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
 // ---------------------------------------------------------------------------
 class ProviderFormScreen extends StatefulWidget {
   final AppStore store;
-  const ProviderFormScreen({super.key, required this.store});
+  final bool showBack;
+  const ProviderFormScreen({super.key, required this.store, this.showBack = true});
 
   @override
   State<ProviderFormScreen> createState() => _ProviderFormScreenState();
@@ -431,13 +436,15 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
         (_url?.text.trim().isNotEmpty ?? false);
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            store.endProviderDraft();
-            store.popPage();
-          },
-        ),
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  store.endProviderDraft();
+                  store.popPage();
+                },
+              )
+            : null,
         title: Text(
           d.isEdit ? context.l10n.settingsTitle : context.l10n.addProvider,
         ),
@@ -558,7 +565,8 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
 // ---------------------------------------------------------------------------
 class GatewayFormScreen extends StatefulWidget {
   final AppStore store;
-  const GatewayFormScreen({super.key, required this.store});
+  final bool showBack;
+  const GatewayFormScreen({super.key, required this.store, this.showBack = true});
 
   @override
   State<GatewayFormScreen> createState() => _GatewayFormScreenState();
@@ -672,13 +680,15 @@ class _GatewayFormScreenState extends State<GatewayFormScreen> {
         d.models.where((m) => (m.contextLimit ?? 0) <= 0).toList();
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            store.endProviderDraft();
-            store.popPage();
-          },
-        ),
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  store.endProviderDraft();
+                  store.popPage();
+                },
+              )
+            : null,
         title: Text(context.l10n.gatewayTitle),
       ),
       body: ListView(
@@ -929,7 +939,8 @@ class _ModelRow extends StatelessWidget {
 class ProviderModelScreen extends StatefulWidget {
   final AppStore store;
   final String? modelId;
-  const ProviderModelScreen({super.key, required this.store, this.modelId});
+  final bool showBack;
+  const ProviderModelScreen({super.key, required this.store, this.modelId, this.showBack = true});
 
   @override
   State<ProviderModelScreen> createState() => _ProviderModelScreenState();
@@ -1051,10 +1062,12 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => store.popPage(),
-        ),
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => store.popPage(),
+              )
+            : null,
         title: Text(_isEdit ? context.l10n.modelLabel : context.l10n.addModel),
         actions: [
           if (_isEdit)
@@ -1154,7 +1167,8 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
 class GatewayModelScreen extends StatefulWidget {
   final AppStore store;
   final String? modelId;
-  const GatewayModelScreen({super.key, required this.store, this.modelId});
+  final bool showBack;
+  const GatewayModelScreen({super.key, required this.store, this.modelId, this.showBack = true});
 
   @override
   State<GatewayModelScreen> createState() => _GatewayModelScreenState();
@@ -1293,10 +1307,12 @@ class _GatewayModelScreenState extends State<GatewayModelScreen> {
     final isMultimodal = ctx == null || ctx <= 0;
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => store.popPage(),
-        ),
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => store.popPage(),
+              )
+            : null,
         title: Text(_isEdit ? context.l10n.modelLabel : context.l10n.addModel),
         actions: [
           if (_isEdit)
