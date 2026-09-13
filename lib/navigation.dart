@@ -49,6 +49,13 @@ class ProvidersListPage extends AppPage {
   const ProvidersListPage() : super('providers_list');
 }
 
+/// Config tab — create a NEW user preset on its own page (name + system
+/// prompt + max turns + tool whitelist up front), rather than a stub row that
+/// is then expanded and edited.
+class PresetFormPage extends AppPage {
+  const PresetFormPage() : super('preset_form_new');
+}
+
 /// Config tab — add/edit a single provider's connection fields; its bottom
 /// section lists the provider's models and offers "+" → [ProviderModelsPage].
 class ProviderFormPage extends AppPage {

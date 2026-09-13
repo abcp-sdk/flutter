@@ -6,6 +6,7 @@ import 'screens/chat.dart';
 import 'screens/session_list_page.dart';
 import 'screens/chat_overlay_page.dart';
 import 'screens/config.dart';
+import 'screens/preset_form.dart';
 import 'screens/providers.dart';
 import 'prefs.dart';
 
@@ -51,6 +52,13 @@ Widget buildPage(
         onSwitchBackend: onSwitchBackend,
         onBackendSwitched: onBackendSwitched,
         initialId: id,
+      );
+    case PresetFormPage():
+      return PresetFormScreen(
+        key: ValueKey(page.key),
+        store: store,
+        api: store.api,
+        showBack: isTablet,
       );
     case ProvidersListPage():
       return ProvidersListScreen(

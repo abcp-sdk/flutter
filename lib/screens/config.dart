@@ -9,7 +9,6 @@ import '../prefs.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dialogs.dart';
-import 'defaults.dart';
 import 'providers.dart';
 
 /// Recreates ConfigPage.svelte (simplified, without the external
@@ -49,9 +48,6 @@ class ConfigScreen extends StatefulWidget {
 class _ConfigScreenState extends State<ConfigScreen> {
   AppStore get store => widget.store;
   bool _loading = true;
-  /// Lets the AppBar's "+" drive the presets detail's inline new-preset row,
-  /// mirroring the providers page (top-right action instead of a button).
-  final GlobalKey<_PresetsDetailState> _presetsKey = GlobalKey();
 
   @override
   void initState() {
@@ -89,7 +85,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             IconButton(
               icon: const Icon(Icons.add_rounded),
               tooltip: context.l10n.newPreset,
-              onPressed: () => _presetsKey.currentState?.startNew(),
+              onPressed: () => store.pushPage(const PresetFormPage()),
             ),
         ],
       ),
@@ -113,8 +109,6 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return context.l10n.tools;
       case 'backends':
         return context.l10n.backendsTitle;
-      case 'defaults':
-        return context.l10n.defaults;
       default:
         return id;
     }
@@ -168,12 +162,6 @@ class _ConfigScreenState extends State<ConfigScreen> {
           Icons.auto_awesome_outlined,
           'presets',
           () => _push('presets'),
-        ),
-        _listTile(
-          context,
-          Icons.star_outline_rounded,
-          'defaults',
-          () => _push('defaults'),
         ),
         _SectionHeader(context.l10n.workspace),
         _listTile(
@@ -280,8 +268,6 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return _providersDetail();
       case 'presets':
         return _presetsDetail();
-      case 'defaults':
-        return DefaultsDetail(api: store.api);
       case 'tools':
         return _toolsDetail();
       case 'backends':
@@ -311,7 +297,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   Widget _presetsDetail() {
-    return _PresetsDetail(key: _presetsKey, api: store.api);
+    return _PresetsDetail(api: store.api);
   }
 
   Widget _toolsDetail() {
@@ -357,8 +343,7 @@ class _PresetsDetailState extends State<_PresetsDetail> {
   bool _loading = true;
   String? _editingId;
   late Preset _edit;
-  bool _showNew = false;
-  final _newId = TextEditingController();
+  String _defaultPreset = '';
 
   // Persistent editors for the expanded preset so keystrokes never rebuild
   // the TextFields (which would reset the cursor / leak controllers).
@@ -373,7 +358,6 @@ class _PresetsDetailState extends State<_PresetsDetail> {
 
   @override
   void dispose() {
-    _newId.dispose();
     _sysPromptCtrl.dispose();
     _maxTurnsCtrl.dispose();
     super.dispose();
@@ -381,6 +365,9 @@ class _PresetsDetailState extends State<_PresetsDetail> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    try {
+      _defaultPreset = await widget.api.config('default_preset');
+    } catch (_) {}
     try {
       _presets = await widget.api.presets(
         locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
@@ -396,26 +383,6 @@ class _PresetsDetailState extends State<_PresetsDetail> {
       if (isAuthError(e)) showAuthExpiredDialog();
     }
     setState(() => _loading = false);
-  }
-
-  /// Reveal the inline new-preset row (driven by the AppBar "+").
-  void startNew() {
-    if (!mounted) return;
-    setState(() => _showNew = true);
-  }
-
-  Future<void> _create() async {
-    final id = _newId.text.trim();
-    if (id.isEmpty) return;
-    await widget.api.savePreset(
-      Preset(id: id, systemPrompt: '', tools: [], maxTurns: 30),
-    );
-    setState(() {
-      _showNew = false;
-      _editingId = null;
-    });
-    _newId.clear();
-    await _load();
   }
 
   Future<void> _delete(Preset p) async {
@@ -582,6 +549,54 @@ class _PresetsDetailState extends State<_PresetsDetail> {
     );
   }
 
+  /// The tenant DEFAULT preset, chosen inline here (not in a separate
+  /// settings box). Setting it writes `default_preset`, which the agent
+  /// applies to every session created without an explicit preset.
+  Widget _defaultPresetTile(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return ListTile(
+      leading: Icon(Icons.star_outline_rounded, size: 20, color: colors.primary),
+      title: Text(
+        context.l10n.defaultPreset,
+        style: text.meta.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        _defaultPreset.isEmpty ? context.l10n.none : _defaultPreset,
+        style: text.micro.copyWith(color: colors.mutedForeground),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+      onTap: () => _pickDefaultPreset(context),
+    );
+  }
+
+  Future<void> _pickDefaultPreset(BuildContext context) async {
+    final ids = _presets.map((p) => p.id).toList()..sort();
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(ctx.l10n.defaultPreset),
+        children: [
+          for (final id in ['', ...ids])
+            RadioListTile<String>(
+              value: id,
+              groupValue: _defaultPreset,
+              title: Text(id.isEmpty ? ctx.l10n.none : id,
+                  style: textOf(ctx).meta),
+              onChanged: (v) => Navigator.pop(ctx, v ?? ''),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || picked == _defaultPreset) return;
+    try {
+      await widget.api.setConfigKey('default_preset', picked);
+      if (mounted) setState(() => _defaultPreset = picked);
+    } catch (e) {
+      if (mounted) showErrorToast(context, '$e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -590,30 +605,10 @@ class _PresetsDetailState extends State<_PresetsDetail> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        if (_showNew) ...[
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _newId,
-                  autofocus: true,
-                  decoration: InputDecoration(labelText: context.l10n.presetId),
-                  onSubmitted: (_) => _create(),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              FilledButton(
-                onPressed: _newId.text.trim().isEmpty ? null : _create,
-                child: Text(context.l10n.create),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, size: 18),
-                onPressed: () => setState(() => _showNew = false),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
+        Card(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _defaultPresetTile(context),
+        ),
         for (final p in _presets)
           Card(
             margin: const EdgeInsets.only(top: AppSpacing.sm),

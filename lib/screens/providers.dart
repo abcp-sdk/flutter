@@ -122,6 +122,7 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
   Map<String, ProviderInfo> _providers = {};
   bool _loading = true;
   bool _providersLoading = false;
+  String _defaultModel = '';
 
   @override
   void initState() {
@@ -160,6 +161,9 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    try {
+      _defaultModel = await store.api.config('default_model');
+    } catch (_) {}
     await _reload();
     if (mounted) setState(() => _loading = false);
   }
@@ -228,6 +232,7 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
           : ListView(
               children: [
                 _sectionHeader(context, context.l10n.providersSection),
+                _defaultProviderTile(context, textProviders, colors),
                 if (textProviders.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(AppSpacing.lg),
@@ -310,6 +315,70 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
       trailing: const Icon(Icons.chevron_right_rounded, size: 18),
       onTap: () => _edit(p),
     );
+  }
+
+  /// The tenant DEFAULT text model, chosen inline here (not in a separate
+  /// settings box). Selecting a provider's text model sets `default_model`,
+  /// which the agent applies to every session created without an explicit
+  /// model. Value is the canonical `provider_id/model_id` ref.
+  Widget _defaultProviderTile(
+    BuildContext context,
+    List<ProviderInfo> providers,
+    AppColors colors,
+  ) {
+    final text = textOf(context);
+    final refs = <String>[
+      for (final p in providers)
+        for (final m in p.models)
+          if ((m.contextLimit ?? 0) > 0) '${p.providerId}/${m.id}',
+    ]..sort();
+    if (_defaultModel.isNotEmpty && !refs.contains(_defaultModel)) {
+      refs.insert(0, _defaultModel);
+    }
+    return ListTile(
+      leading: Icon(Icons.star_outline_rounded, size: 20, color: colors.primary),
+      title: Text(
+        context.l10n.defaultModel,
+        style: text.meta.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        _defaultModel.isEmpty ? context.l10n.none : _defaultModel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: text.micro.copyWith(color: colors.mutedForeground),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+      onTap: () => _pickDefaultModel(context, refs),
+    );
+  }
+
+  Future<void> _pickDefaultModel(
+    BuildContext context,
+    List<String> refs,
+  ) async {
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(ctx.l10n.defaultModel),
+        children: [
+          for (final ref in ['', ...refs])
+            RadioListTile<String>(
+              value: ref,
+              groupValue: _defaultModel,
+              title: Text(ref.isEmpty ? ctx.l10n.none : ref,
+                  style: textOf(ctx).meta),
+              onChanged: (v) => Navigator.pop(ctx, v ?? ''),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || picked == _defaultModel) return;
+    try {
+      await store.api.setConfigKey('default_model', picked);
+      if (mounted) setState(() => _defaultModel = picked);
+    } catch (e) {
+      if (mounted) showErrorToast(context, '$e');
+    }
   }
 }
 
