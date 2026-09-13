@@ -1,0 +1,40 @@
+name: pasteboard
+description: A flutter plugin which could read image,files from clipboard and write files to clipboard.
+version: 0.5.0
+homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/pasteboard
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  web: ^1.0.0
+  uuid: ^4.0.0
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: "^2.0.0"
+
+# NOTE: vendored copy (see tool/regen-third-party.sh). The `android`
+# platform entry is intentionally REMOVED so the Android Gradle build does
+# not pull the KGP-applying module (Flutter 3.47 warns it will break in a
+# future release). Clipboard paste / drag-and-drop are desktop+web features
+# here; Dart sources are byte-for-byte upstream.
+flutter:
+  plugin:
+    platforms:
+      macos:
+        pluginClass: PasteboardPlugin
+      windows:
+        pluginClass: PasteboardPlugin
+      linux:
+        pluginClass: PasteboardPlugin
+      ios:
+        pluginClass: PasteboardPlugin
+      web:

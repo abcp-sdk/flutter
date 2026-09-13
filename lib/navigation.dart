@@ -55,6 +55,13 @@ class ProviderFormPage extends AppPage {
   const ProviderFormPage() : super('provider_form');
 }
 
+/// Config tab — the single Vercel-compatible gateway form (base URL + key +
+/// superset model list). Registered at most once; the list page opens this
+/// instead of [ProviderFormPage].
+class GatewayFormPage extends AppPage {
+  const GatewayFormPage() : super('gateway_form');
+}
+
 /// Config tab — a single model entry form. [modelId] selects the model being
 /// edited, or null for a brand-new model. Used both for adding a model to the
 /// provider draft and for tapping an existing model row to edit it.
@@ -62,6 +69,16 @@ class ProviderModelsPage extends AppPage {
   final String? modelId;
   ProviderModelsPage({this.modelId})
     : super('provider_model_${modelId ?? 'new'}');
+}
+
+/// Config tab — a single GATEWAY model entry form (id, name, optional context;
+/// the kind is inferred: a positive context means a text/vision model, empty
+/// means a multimodal model served to the tools). Kept separate from the text
+/// provider model form because the two have different fields and validation.
+class GatewayModelPage extends AppPage {
+  final String? modelId;
+  GatewayModelPage({this.modelId})
+    : super('gateway_model_${modelId ?? 'new'}');
 }
 
 /// The stack-bottom page for a given tab.

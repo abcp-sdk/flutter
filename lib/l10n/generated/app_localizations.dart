@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:
-  /// **'ZergX'**
+  /// **'Agent'**
   String get appTitle;
 
   /// No description provided for @gatewayUrl.
@@ -290,6 +290,18 @@ abstract class AppLocalizations {
   /// **'撤销'**
   String get undo;
 
+  /// No description provided for @retry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get retry;
+
+  /// No description provided for @editMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑消息'**
+  String get editMessage;
+
   /// No description provided for @undoTitle.
   ///
   /// In zh, this message translates to:
@@ -368,6 +380,18 @@ abstract class AppLocalizations {
   /// **'添加附件'**
   String get attach;
 
+  /// No description provided for @dropToAttach.
+  ///
+  /// In zh, this message translates to:
+  /// **'松开以添加为附件'**
+  String get dropToAttach;
+
+  /// No description provided for @folderNotAllowed.
+  ///
+  /// In zh, this message translates to:
+  /// **'不支持拖入文件夹——请拖入单个文件'**
+  String get folderNotAllowed;
+
   /// No description provided for @image.
   ///
   /// In zh, this message translates to:
@@ -397,6 +421,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'附件仍在上传中，请稍候'**
   String get waitUpload;
+
+  /// No description provided for @uploadFailedRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'{arg1} 个附件上传失败——请重试或移除后再发送'**
+  String uploadFailedRetry(String arg1);
 
   /// No description provided for @downloaded.
   ///
@@ -692,6 +722,18 @@ abstract class AppLocalizations {
   /// **'录音太短'**
   String get voiceTooShort;
 
+  /// No description provided for @uploading.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传中…'**
+  String get uploading;
+
+  /// No description provided for @uploadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传失败'**
+  String get uploadFailed;
+
   /// No description provided for @capText.
   ///
   /// In zh, this message translates to:
@@ -715,6 +757,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'语音'**
   String get capSpeech;
+
+  /// No description provided for @capTranscription.
+  ///
+  /// In zh, this message translates to:
+  /// **'转写'**
+  String get capTranscription;
+
+  /// No description provided for @capEmbedding.
+  ///
+  /// In zh, this message translates to:
+  /// **'向量'**
+  String get capEmbedding;
+
+  /// No description provided for @capReranking.
+  ///
+  /// In zh, this message translates to:
+  /// **'重排'**
+  String get capReranking;
+
+  /// No description provided for @capRealtime.
+  ///
+  /// In zh, this message translates to:
+  /// **'实时'**
+  String get capRealtime;
 
   /// No description provided for @newOrg.
   ///
@@ -2011,6 +2077,108 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'暂无会话'**
   String get noSessions;
+
+  /// No description provided for @apiTypeGateway.
+  ///
+  /// In zh, this message translates to:
+  /// **'Vercel AI 网关'**
+  String get apiTypeGateway;
+
+  /// No description provided for @providersSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'文本供应商'**
+  String get providersSection;
+
+  /// No description provided for @gatewaySection.
+  ///
+  /// In zh, this message translates to:
+  /// **'多模态网关'**
+  String get gatewaySection;
+
+  /// No description provided for @gatewayTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 网关'**
+  String get gatewayTitle;
+
+  /// No description provided for @gatewayHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'唯一的 Vercel 兼容网关。文本模型需要上下文长度；无上下文长度的模型（图像/视频/语音/转写）供工具使用。'**
+  String get gatewayHint;
+
+  /// No description provided for @gatewayModelsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加网关模型：文本模型填上下文长度，多模态模型留空。'**
+  String get gatewayModelsHint;
+
+  /// No description provided for @multimodal.
+  ///
+  /// In zh, this message translates to:
+  /// **'多模态'**
+  String get multimodal;
+
+  /// No description provided for @contextOptional.
+  ///
+  /// In zh, this message translates to:
+  /// **'可选 — 留空表示多模态模型'**
+  String get contextOptional;
+
+  /// No description provided for @testAs.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试方式'**
+  String get testAs;
+
+  /// No description provided for @modelNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示名称…'**
+  String get modelNameLabel;
+
+  /// No description provided for @discoverModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动识别模型'**
+  String get discoverModels;
+
+  /// No description provided for @discoveringModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'识别中…'**
+  String get discoveringModels;
+
+  /// No description provided for @discoveredModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'已识别 {arg1} 个模型'**
+  String discoveredModels(Object arg1);
+
+  /// No description provided for @gatewayTextModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'文本 / 视觉模型'**
+  String get gatewayTextModels;
+
+  /// No description provided for @gatewayTextModelsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加语言模型（需要上下文长度）。'**
+  String get gatewayTextModelsHint;
+
+  /// No description provided for @gatewayMultimodalModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'多模态模型'**
+  String get gatewayMultimodalModels;
+
+  /// No description provided for @gatewayMultimodalModelsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加图像/视频/语音/转写模型（无上下文长度）。'**
+  String get gatewayMultimodalModelsHint;
 }
 
 class _AppLocalizationsDelegate

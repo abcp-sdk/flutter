@@ -10,7 +10,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'ZergX';
+  String get appTitle => 'Agent';
 
   @override
   String get gatewayUrl => 'Gateway URL';
@@ -108,6 +108,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get undo => 'Undo';
 
   @override
+  String get retry => 'Retry';
+
+  @override
+  String get editMessage => 'Edit message';
+
+  @override
   String get undoTitle => 'Undo this message?';
 
   @override
@@ -149,6 +155,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attach => 'Attach file';
 
   @override
+  String get dropToAttach => 'Drop to add as attachment';
+
+  @override
+  String get folderNotAllowed =>
+      'Folders can\'t be attached — drop individual files';
+
+  @override
   String get image => 'image';
 
   @override
@@ -162,6 +175,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get waitUpload => 'Attachment is still uploading';
+
+  @override
+  String uploadFailedRetry(String arg1) {
+    return '$arg1 attachment(s) failed to upload — retry or remove them before sending';
+  }
 
   @override
   String get downloaded => 'Downloaded to';
@@ -317,6 +335,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceTooShort => 'Recording too short';
 
   @override
+  String get uploading => 'Uploading…';
+
+  @override
+  String get uploadFailed => 'Upload failed';
+
+  @override
   String get capText => 'text';
 
   @override
@@ -327,6 +351,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get capSpeech => 'speech';
+
+  @override
+  String get capTranscription => 'ASR';
+
+  @override
+  String get capEmbedding => 'embedding';
+
+  @override
+  String get capReranking => 'rerank';
+
+  @override
+  String get capRealtime => 'realtime';
 
   @override
   String get newOrg => 'New organization';
@@ -1054,4 +1090,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noSessions => 'No sessions';
+
+  @override
+  String get apiTypeGateway => 'Vercel AI Gateway';
+
+  @override
+  String get providersSection => 'Text providers';
+
+  @override
+  String get gatewaySection => 'Multimodal gateway';
+
+  @override
+  String get gatewayTitle => 'AI Gateway';
+
+  @override
+  String get gatewayHint =>
+      'The single Vercel-compatible gateway. Text models need a context length; models without one (image/video/speech/transcription) are used by tools.';
+
+  @override
+  String get gatewayModelsHint =>
+      'Add the gateway\'s models: give text models a context length, leave multimodal models empty.';
+
+  @override
+  String get multimodal => 'multimodal';
+
+  @override
+  String get contextOptional => 'optional — empty marks a multimodal model';
+
+  @override
+  String get testAs => 'Test as';
+
+  @override
+  String get modelNameLabel => 'display name…';
+
+  @override
+  String get discoverModels => 'Auto-detect models';
+
+  @override
+  String get discoveringModels => 'Detecting…';
+
+  @override
+  String discoveredModels(Object arg1) {
+    return 'Discovered $arg1 models';
+  }
+
+  @override
+  String get gatewayTextModels => 'Text / vision models';
+
+  @override
+  String get gatewayTextModelsHint =>
+      'Add a language model (needs a context length).';
+
+  @override
+  String get gatewayMultimodalModels => 'Multimodal models';
+
+  @override
+  String get gatewayMultimodalModelsHint =>
+      'Add image/video/speech/transcription models (no context length).';
 }

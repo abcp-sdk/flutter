@@ -10,7 +10,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'ZergX';
+  String get appTitle => 'Agent';
 
   @override
   String get gatewayUrl => '网关地址';
@@ -108,6 +108,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get undo => '撤销';
 
   @override
+  String get retry => '重试';
+
+  @override
+  String get editMessage => '编辑消息';
+
+  @override
   String get undoTitle => '撤销此消息？';
 
   @override
@@ -149,6 +155,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attach => '添加附件';
 
   @override
+  String get dropToAttach => '松开以添加为附件';
+
+  @override
+  String get folderNotAllowed => '不支持拖入文件夹——请拖入单个文件';
+
+  @override
   String get image => '图片';
 
   @override
@@ -162,6 +174,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get waitUpload => '附件仍在上传中，请稍候';
+
+  @override
+  String uploadFailedRetry(String arg1) {
+    return '$arg1 个附件上传失败——请重试或移除后再发送';
+  }
 
   @override
   String get downloaded => '已下载到';
@@ -317,6 +334,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceTooShort => '录音太短';
 
   @override
+  String get uploading => '上传中…';
+
+  @override
+  String get uploadFailed => '上传失败';
+
+  @override
   String get capText => '文本';
 
   @override
@@ -327,6 +350,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get capSpeech => '语音';
+
+  @override
+  String get capTranscription => '转写';
+
+  @override
+  String get capEmbedding => '向量';
+
+  @override
+  String get capReranking => '重排';
+
+  @override
+  String get capRealtime => '实时';
 
   @override
   String get newOrg => '新建组织';
@@ -1047,4 +1082,58 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noSessions => '暂无会话';
+
+  @override
+  String get apiTypeGateway => 'Vercel AI 网关';
+
+  @override
+  String get providersSection => '文本供应商';
+
+  @override
+  String get gatewaySection => '多模态网关';
+
+  @override
+  String get gatewayTitle => 'AI 网关';
+
+  @override
+  String get gatewayHint =>
+      '唯一的 Vercel 兼容网关。文本模型需要上下文长度；无上下文长度的模型（图像/视频/语音/转写）供工具使用。';
+
+  @override
+  String get gatewayModelsHint => '添加网关模型：文本模型填上下文长度，多模态模型留空。';
+
+  @override
+  String get multimodal => '多模态';
+
+  @override
+  String get contextOptional => '可选 — 留空表示多模态模型';
+
+  @override
+  String get testAs => '测试方式';
+
+  @override
+  String get modelNameLabel => '显示名称…';
+
+  @override
+  String get discoverModels => '自动识别模型';
+
+  @override
+  String get discoveringModels => '识别中…';
+
+  @override
+  String discoveredModels(Object arg1) {
+    return '已识别 $arg1 个模型';
+  }
+
+  @override
+  String get gatewayTextModels => '文本 / 视觉模型';
+
+  @override
+  String get gatewayTextModelsHint => '添加语言模型（需要上下文长度）。';
+
+  @override
+  String get gatewayMultimodalModels => '多模态模型';
+
+  @override
+  String get gatewayMultimodalModelsHint => '添加图像/视频/语音/转写模型（无上下文长度）。';
 }

@@ -7,13 +7,26 @@ import 'package:flutter/foundation.dart';
 import 'api.dart';
 import 'i18n.dart';
 import 'models.dart';
+import 'services/local_store.dart';
 
 /// Mirrors hooks/useMessages.svelte.ts + message-utils.ts.
 class MessagesController extends ChangeNotifier {
-  MessagesController({required this.api, required this.getSessionId});
+  MessagesController({required this.api, required this.getSessionId, this.local});
 
   final AgentBindApi api;
   final String Function() getSessionId;
+
+  /// Persistent local mirror for instant startup + incremental sync. Null
+  /// disables persistence (network-only behaviour, as before).
+  final LocalStore? local;
+
+  /// The last server tip this controller has synced to (the pin used as the
+  /// `after` anchor on the next delta read).
+  String _syncedTipId = '';
+
+  /// The oldest cached message id at the time of the last write. Used to
+  /// detect a truncated / partially-written cache (see [_sync]).
+  String _syncedOldestId = '';
 
   List<ChatMessage> messages = [];
   bool sending = false;
@@ -75,9 +88,189 @@ class MessagesController extends ChangeNotifier {
   void init() {
     final sid = getSessionId();
     if (sid.isEmpty) return;
-    _fetchMessages();
+    _boot(sid);
+  }
+
+  /// Local-first boot: render cached messages immediately, then reconcile with
+  /// the server incrementally (or a full baseline when we have no anchor).
+  Future<void> _boot(String sid) async {
+    await _hydrateFromLocal(sid);
+    await _sync(sid);
     _recover();
     _connect(sid);
+  }
+
+  /// Load the cached conversation from the local DB so the UI is instant /
+  /// offline-capable. No-op without a local store.
+  Future<void> _hydrateFromLocal(String sid) async {
+    final l = local;
+    if (l == null) return;
+    try {
+      final cached = await l.loadMessages(sid);
+      // ONLY trust a stored anchor when we actually hold cached messages: a
+      // non-empty anchor with an empty cache would make the incremental read
+      // return an empty delta and strand the whole chain (nothing renders).
+      _syncedTipId = cached.isEmpty ? '' : await l.serverTipId(sid);
+      _syncedOldestId =
+          cached.isEmpty ? '' : await l.oldestCachedId(sid);
+      if (cached.isNotEmpty) {
+        final localOwned =
+            messages.where((m) => m.isLocal).toList();
+        messages = [...cached, ...localOwned];
+        _renumber();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  /// Reconcile with the server: incremental when we hold an anchor, else a
+  /// baseline fetch. `resync` from the server (anchor withdrawn / chain
+  /// re-pointed) drops the cache and re-fetches. An empty delta anchored on
+  /// the tip while we hold NO cached rows also falls back to a baseline.
+  ///
+  /// CACHE INTEGRITY: if we hold cached rows but no recorded oldest-id anchor
+  /// (or the recorded oldest no longer matches the actual oldest row — i.e.
+  /// the cache was truncated/partially written), the cache is untrustworthy and
+  /// we rebuild from a full baseline instead of trusting the tip anchor.
+  Future<void> _sync(String sid) async {
+    final l = local;
+    loading = messages.isEmpty;
+    if (loading) notifyListeners();
+    try {
+      final cacheConsistent = messages.isEmpty ||
+          (_syncedTipId.isNotEmpty &&
+              _syncedOldestId.isNotEmpty &&
+              await l!.oldestCachedId(sid) == _syncedOldestId);
+      if (l != null && _syncedTipId.isNotEmpty && cacheConsistent) {
+        final r = await api.messagesAfter(sid, _syncedTipId);
+        if (r.resync) {
+          await _baseline(sid);
+        } else if (r.messages.isEmpty && messages.isEmpty) {
+          // Stale anchor with no cache: we can never rebuild from a no-op
+          // delta, so fetch a full baseline instead.
+          await _baseline(sid);
+        } else {
+          _mergeServer(sid, r.messages, tipId: r.tipId);
+          await l.persistMessages(sid, messages, tipId: r.tipId);
+        }
+      } else {
+        await _baseline(sid);
+      }
+    } catch (_) {
+      // Offline: keep whatever the local cache showed.
+    }
+    loading = false;
+    notifyListeners();
+  }
+
+  /// Full baseline: the newest page, replacing any cached copy. Never throws
+  /// to the caller (a failed fetch leaves the existing cache intact).
+  Future<void> _baseline(String sid) async {
+    try {
+      final (msgs, more) = await api.messages(sid, limit: 50);
+      final chat = mapMessagesToChat(msgs);
+      final localOwned = messages.where((m) => m.isLocal).toList();
+      messages = [...localOwned, ...chat];
+      _renumber();
+      hasMore = more;
+      final l = local;
+      if (l != null) {
+        _syncedTipId = chat.isNotEmpty ? chat.last.id : '';
+        await l.applyServerMessages(sid, msgs,
+            replace: true, tipId: _syncedTipId);
+        _syncedOldestId = await l.oldestCachedId(sid);
+      }
+    } catch (_) {
+      // Keep the existing cache; the caller decides how to surface this.
+    }
+  }
+
+  /// Merge a server delta into memory: replace by id, keep in-flight local
+  /// bubbles, and re-assign monotonic seqs so ordering stays correct.
+  ///
+  /// A COMPLETED local bubble (user already adopted its server id → non-local;
+  /// assistant finished) is dropped once the server delivered messages — the
+  /// server copy supersedes it. A still-streaming/pending bubble is kept (its
+  /// turn is in flight).
+  void _mergeServer(String sid, List<Message> msgs, {required String tipId}) {
+    final hasServer = msgs.isNotEmpty;
+    final chat = mapMessagesToChat(msgs);
+    final byId = <String, ChatMessage>{};
+    for (final m in messages) {
+      if (!m.isLocal) {
+        byId[m.id] = m;
+        continue;
+      }
+      // Keep only in-flight local bubbles.
+      final inFlight = m.status == 'streaming' || m.status == 'pending';
+      if (!hasServer || inFlight) {
+        byId['local:${m.id}'] = m;
+      }
+    }
+    for (final m in chat) {
+      byId[m.id] = m;
+    }
+    messages = byId.values.toList();
+    _renumber();
+    _syncedTipId = tipId;
+  }
+
+  /// Assign sequential `seq` values in true CHAIN order (by creation time,
+  /// then id), then rebuild `_nextSeq`. The chain order must come from
+  /// `createdAt` — not from the incoming `seq` values, which are per-page
+  /// indices that collide when cached rows and a delta are merged.
+  void _renumber() {
+    final ordered = [...messages]..sort((a, b) {
+        final at = DateTime.tryParse(a.createdAt)?.millisecondsSinceEpoch ?? 0;
+        final bt = DateTime.tryParse(b.createdAt)?.millisecondsSinceEpoch ?? 0;
+        if (at != bt) return at - bt;
+        return a.id.compareTo(b.id);
+      });
+    messages = [
+      for (var i = 0; i < ordered.length; i++) ordered[i].copyWith(seq: i),
+    ];
+    _bumpSeqAfter(messages);
+  }
+
+  Future<void> _fetchMessages([String? before]) async {
+    loading = true;
+    notifyListeners();
+    try {
+      final sid = getSessionId();
+      final (msgs, more) =
+          await api.messages(sid, before: before, limit: 50);
+      final chat = mapMessagesToChat(msgs);
+      if (before != null) {
+        // Prepend an older page; keep everything after it.
+        final existing = messages.map((m) => m.id).toSet();
+        messages = [
+          ...chat.where((m) => !existing.contains(m.id)),
+          ...messages,
+        ];
+      } else {
+        // Re-fetch the newest page, replacing non-local server messages but
+        // preserving in-flight local bubbles.
+        final localOwned = messages.where((m) => m.isLocal).toList();
+        messages = [...localOwned, ...chat];
+      }
+      _renumber();
+      hasMore = more;
+    } catch (_) {}
+    loading = false;
+    // NOTE: no _syncIdle() here — a plain history fetch must not terminate an
+    // active turn. Convergence to idle is driven by the stream's own
+    // terminal events (and _onStreamClosed on drop / error).
+    notifyListeners();
+    // Persist so an older page loaded above survives an app restart (the
+    // server turns are all already cached; only local bubbles are skipped
+    // inside persistMessages).
+    final l = local;
+    if (l != null) {
+      try {
+        await l.persistMessages(getSessionId(), messages, tipId: _syncedTipId);
+        _syncedOldestId = await l.oldestCachedId(getSessionId());
+      } catch (_) {}
+    }
   }
 
   void _markActivity() {
@@ -93,37 +286,6 @@ class MessagesController extends ChangeNotifier {
     _sub?.cancel();
     _sub = null;
     super.dispose();
-  }
-
-  Future<void> _fetchMessages([String? before]) async {
-    loading = true;
-    notifyListeners();
-    try {
-      final sid = getSessionId();
-      final (msgs, more) =
-          await api.messages(sid, before: before, limit: 50);
-      final chat = mapMessagesToChat(msgs);
-      _bumpSeqAfter(chat);
-      if (before != null) {
-        final existing = messages.map((m) => m.id).toSet();
-        messages = [...chat.where((m) => !existing.contains(m.id)), ...messages];
-      } else {
-        // Preserve locally-owned in-flight bubbles: the optimistic user
-        // message (pending) AND any streaming assistant bubble built from the
-        // live/replayed stream. Dropping the streaming one would erase the
-        // replayed thinking/text accumulated before this fetch returned.
-        final local = messages
-            .where((m) => m.status == 'pending' || m.status == 'streaming')
-            .toList();
-        messages = [...local, ...chat];
-      }
-      hasMore = more;
-    } catch (_) {}
-    loading = false;
-    // NOTE: no _syncIdle() here — a plain history fetch must not terminate an
-    // active turn. Convergence to idle is driven by the stream's own
-    // terminal events (and _onStreamClosed on drop / error).
-    notifyListeners();
   }
 
   Future<void> _recover() async {
@@ -145,6 +307,7 @@ class MessagesController extends ChangeNotifier {
                 status: 'streaming',
                 parts: [],
                 createdAt: DateTime.now().toIso8601String(),
+                isLocal: true,
                 seq: _allocSeq()),
           ];
         }
@@ -172,7 +335,7 @@ class MessagesController extends ChangeNotifier {
     _seenEids.clear();
     _activeRunId = null;
     _awaitingRun = true;
-    _sub = api.streamEvents(sid).listen(
+    _sub = api.streamEvents(sid, since: _syncedTipId).listen(
       _handleEvent,
       onError: (_) => _onStreamClosed(sid),
       onDone: () => _onStreamClosed(sid),
@@ -383,6 +546,7 @@ class MessagesController extends ChangeNotifier {
           status: 'streaming',
           parts: [],
           createdAt: DateTime.now().toIso8601String(),
+          isLocal: true,
           seq: _allocSeq()),
     ];
     return id;
@@ -488,6 +652,37 @@ class MessagesController extends ChangeNotifier {
     _activeRunId = null;
     sending = false;
     notifyListeners();
+    // Reconcile the just-finished turn with the server: this adopts the real
+    // server ids for the reply (so it persists and survives a restart) and
+    // advances the sync anchor only AFTER the merge.
+    _reconcile();
+  }
+
+  /// After a turn completes, pull the server delta, adopt real ids (dropping
+  /// the local streaming bubble), persist the merged conversation and advance
+  /// the anchor. This is the ONLY place the anchor moves forward, so we never
+  /// advance past a reply we haven't stored.
+  Future<void> _reconcile() async {
+    final l = local;
+    if (l == null) return;
+    final sid = getSessionId();
+    try {
+      if (_syncedTipId.isEmpty) {
+        // No anchor yet (first ever turn): fetch a baseline so the reply gets
+        // its server id.
+        await _baseline(sid);
+        return;
+      }
+      final r = await api.messagesAfter(sid, _syncedTipId);
+      if (r.resync) {
+        await _baseline(sid);
+        return;
+      }
+      _mergeServer(sid, r.messages, tipId: r.tipId);
+      notifyListeners();
+      await l.persistMessages(sid, messages, tipId: _syncedTipId);
+      _syncedOldestId = await l.oldestCachedId(sid);
+    } catch (_) {}
   }
 
   void _addError(String text) {
@@ -497,6 +692,7 @@ class MessagesController extends ChangeNotifier {
           id: 'err${DateTime.now().microsecondsSinceEpoch}',
           role: 'error',
           status: 'error',
+          isLocal: true,
           parts: [ChatPart(id: 'p${DateTime.now().microsecondsSinceEpoch}', type: 'text', text: text)],
           createdAt: DateTime.now().toIso8601String(),
           seq: _allocSeq()),
@@ -535,6 +731,7 @@ class MessagesController extends ChangeNotifier {
           id: 'u${DateTime.now().microsecondsSinceEpoch}',
           role: 'user',
           status: 'pending',
+          isLocal: true,
           parts: userParts,
           createdAt: DateTime.now().toIso8601String(),
           seq: _allocSeq()),
@@ -546,8 +743,10 @@ class MessagesController extends ChangeNotifier {
           await api.prompt(getSessionId(), trimmed, attachments: codes);
       if (messageId.isNotEmpty) {
         messages = messages.map((m) {
-          if (m.status == 'pending' && m.role == 'user') {
-            return m.copyWith(id: messageId, status: 'complete');
+          if (m.status == 'pending' && m.role == 'user' && m.isLocal) {
+            // Adopt the server id; it is now real history.
+            return m.copyWith(
+                id: messageId, status: 'complete', isLocal: false);
           }
           return m;
         }).toList();
@@ -576,6 +775,36 @@ class MessagesController extends ChangeNotifier {
     _clearStreaming();
     sending = false;
     await _fetchMessages();
+  }
+
+  /// Re-send a user message: withdraw it (and everything after it), then send
+  /// the given [text] with the message's original attachments. Used by both
+  /// Retry (same text) and Edit (new text).
+  Future<void> resendFrom(ChatMessage msg, String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    // A running turn must be stopped first; the server's undo also interrupts,
+    // but we clear local streaming state so the withdrawn bubble doesn't linger.
+    if (sending) {
+      await api.interrupt(getSessionId());
+    }
+    // Attachment codes of the withdrawn message are re-used as-is (the server
+    // re-resolves name/mime/size from the stored blobs).
+    final codes = msg.parts
+        .where((p) => p.type == 'file')
+        .map((p) => p.code ?? '')
+        .where((c) => c.isNotEmpty)
+        .toList();
+    // Withdraw this message and every later one.
+    await api.revert(getSessionId(), msg.id);
+    _clearStreaming();
+    sending = false;
+    await _fetchMessages();
+    final attachments = [
+      for (final c in codes)
+        UploadedFile(code: c, name: null, mime: null),
+    ];
+    await send(trimmed, attachments);
   }
 
   Future<void> loadMore() async {

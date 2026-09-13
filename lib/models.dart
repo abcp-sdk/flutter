@@ -3,6 +3,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 // ---- enums / roles ----
 
@@ -354,16 +355,21 @@ class Message {
   final List<MessagePart> parts;
   final String? createdAt;
 
+  /// Server chain pin (`prev_id`) of this message, or empty at the root.
+  final String prevId;
+
   Message({
     required this.id,
     required this.role,
     required this.parts,
     this.createdAt,
+    this.prevId = '',
   });
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
     id: j['id'] as String? ?? '',
     role: j['role'] as String? ?? '',
+    prevId: j['prev_id'] as String? ?? '',
     parts: (j['parts'] as List? ?? [])
         .map((e) => MessagePart.fromJson(e as Map<String, dynamic>))
         .toList(),
@@ -373,15 +379,19 @@ class Message {
 
 // ---- attachment upload / download ----
 
-/// A file the user picked to attach to a message, before upload.
+/// A file the user picked to attach to a message, before upload. [bytes] is
+/// always available (picked in-memory on web); [path] is set on native
+/// platforms when a filesystem path exists (used for local media preview).
 class UploadedFileSource {
   final String path;
   final String name;
   final String mimeType;
+  final Uint8List? bytes;
   UploadedFileSource({
-    required this.path,
+    this.path = '',
     required this.name,
     required this.mimeType,
+    this.bytes,
   });
 }
 
@@ -451,6 +461,19 @@ class UploadedFile {
   /// `[附件 …file:<code>…]` reference. The client never renders the text.
 }
 
+/// The unsent composer state for one session: the typed text plus the pending
+/// attachments (uploaded, uploading, or errored). Persisted on [AppStore] so
+/// navigating away/back restores the draft. Attachments carry their local path,
+/// so an in-flight/errored image can still render its thumbnail.
+class ChatDraft {
+  String text;
+  List<UploadedFile> attachments;
+  ChatDraft({this.text = '', List<UploadedFile>? attachments})
+    : attachments = attachments ?? [];
+
+  bool get isEmpty => text.trim().isEmpty && attachments.isEmpty;
+}
+
 // ---- chat domain (streaming state) ----
 
 class ChatPart {
@@ -503,6 +526,16 @@ class ChatMessage {
   final String createdAt;
   final int? seq;
 
+  /// Server chain pin (`prev_id`): the predecessor message id. Used by the
+  /// pin-based incremental sync to know where this message sits in the chain.
+  /// Empty for local-only (optimistic / streaming) messages.
+  final String prevId;
+
+  /// True when this bubble exists only on the client (an optimistic user
+  /// message or a streaming assistant bubble). Local messages are never
+  /// persisted as server history and are dropped on every reconcile.
+  final bool isLocal;
+
   ChatMessage({
     required this.id,
     required this.role,
@@ -510,17 +543,27 @@ class ChatMessage {
     required this.parts,
     this.createdAt = '',
     this.seq,
+    this.prevId = '',
+    this.isLocal = false,
   });
 
-  ChatMessage copyWith({String? id, String? status, List<ChatPart>? parts}) =>
-      ChatMessage(
-        id: id ?? this.id,
-        role: role,
-        status: status ?? this.status,
-        parts: parts ?? this.parts,
-        createdAt: createdAt,
-        seq: seq,
-      );
+  ChatMessage copyWith({
+    String? id,
+    String? status,
+    List<ChatPart>? parts,
+    String? prevId,
+    int? seq,
+    bool? isLocal,
+  }) => ChatMessage(
+    id: id ?? this.id,
+    role: role,
+    status: status ?? this.status,
+    parts: parts ?? this.parts,
+    createdAt: createdAt,
+    seq: seq ?? this.seq,
+    prevId: prevId ?? this.prevId,
+    isLocal: isLocal ?? this.isLocal,
+  );
 }
 
 // ---- other ----
@@ -840,29 +883,35 @@ class ProviderModel {
   final String id;
   final String name;
 
-  /// Model context window (tokens). REQUIRED for text models (drives
-  /// compaction budgets); generation models (image/video/speech) omit it.
+  /// Model context window (tokens). For a TEXT provider every model requires a
+  /// positive value (drives compaction budgets). The gateway is a superset:
+  /// `> 0` marks a text model, `0` marks a multimodal model (image/video/
+  /// speech/transcription) used by a tool.
   final int? contextLimit;
 
-  /// What the model generates: text (default) | image | video | speech.
-  final String capability;
+  /// Display-only model KIND as advertised by the gateway `/config`, normalized
+  /// to a short tag: `text` | `image` | `video` | `speech` | `transcription` |
+  /// `embedding` | `reranking` | `realtime`. Empty for a plain text provider or
+  /// an unknown kind. Which TOOL serves a multimodal model is still implied by
+  /// the tool config knob; this only drives the UI label/icon.
+  final String modelType;
   ProviderModel({
     required this.id,
     required this.name,
     this.contextLimit,
-    this.capability = 'text',
+    this.modelType = '',
   });
   factory ProviderModel.fromJson(Map<String, dynamic> j) => ProviderModel(
     id: j['id'] as String? ?? '',
     name: j['name'] as String? ?? '',
     contextLimit: j['context_limit'] as int?,
-    capability: j['capability'] as String? ?? 'text',
+    modelType: j['model_type'] as String? ?? '',
   );
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     if (contextLimit != null) 'context_limit': contextLimit,
-    if (capability != 'text') 'capability': capability,
+    if (modelType.isNotEmpty) 'model_type': modelType,
   };
 }
 

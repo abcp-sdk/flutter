@@ -1,0 +1,15 @@
+# Local (vendored) copies of two plugins whose upstream Android builds still
+# apply the Kotlin Gradle Plugin (KGP), which Flutter 3.47 warns will break on a
+# future release. We only need these plugins for desktop (Linux) + web, where
+# clipboard paste and file drag-and-drop are real UX; Android's native
+# paste/drag is not reachable from this app's composer. The vendored pubspec
+# simply drops the `android` platform entry, so the Android Gradle build never
+# pulls the KGP-applying module and the warning disappears. Dart sources are
+# byte-for-byte upstream.
+#
+# Regenerate after upgrading either package with: tool/regen-third-party.sh
+dependency_overrides:
+  pasteboard:
+    path: third_party/pasteboard
+  desktop_drop:
+    path: third_party/desktop_drop

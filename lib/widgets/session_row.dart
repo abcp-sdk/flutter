@@ -10,7 +10,10 @@ String wechatTime(BuildContext context, String iso) {
   final dt = DateTime.tryParse(iso)?.toLocal();
   if (dt == null) return '';
   final d = DateTime.now().difference(dt);
-  if (d.inMinutes < 1) return I18n.isZh ? '' : context.l10n.timeJustNow;
+  // Show a relative label for EVERY recent message — including "刚刚 / just
+  // now". (Previously zh returned '' for <1min, so a just-landed assistant
+  // message showed NO time at all.)
+  if (d.inMinutes < 1) return context.l10n.timeJustNow;
   if (d.inMinutes < 60) {
     return context.l10n.timeMinAgo('${d.inMinutes}');
   }

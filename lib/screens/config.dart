@@ -196,24 +196,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
     );
     if (picked == null || picked == agentLocaleValue) return;
     await Prefs.saveAgentLocale(picked);
-    final messenger = ScaffoldMessenger.of(context);
     // Push to the agent so the prompt/tool descriptions use the locale
     // immediately (agent dynamic-locale reads the config KV each turn).
     final value = Prefs.effectiveAgentLocale(uiZh: I18n.isZh);
     try {
       await store.api.setConfigKey('locale', value);
-      messenger.showSnackBar(
-        SnackBar(content: Text(context.l10n.agentLocaleApplied('$value'))),
-      );
+      showToast(context, context.l10n.agentLocaleApplied('$value'));
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '$e',
-            style: TextStyle(color: colorsOf(context).destructive),
-          ),
-        ),
-      );
+      showErrorToast(context, '$e');
     }
     setState(() {});
   }
@@ -888,15 +878,15 @@ class _ToolsDetailState extends State<_ToolsDetail> {
   Widget _extConfigEditor(ToolInfo tool, ToolConfig c) {
     final extId = tool.category; // the owning extension id
     final current = _config[tool.name]?[c.name];
-    // Model-ref knobs (e.g. image_model / video_model / tts_model / vlm_model)
-    // render a provider/model dropdown over the agent's registered models,
-    // filtered to the capability the knob names. Everything else stays text.
-    final capability = _capabilityFor(c.name);
-    if (capability != null) {
+    // Model-ref knobs (image_model / image_edit_model / video_model /
+    // tts_model / asr_model) list the GATEWAY provider's models — multimodal
+    // models live only on the single Vercel-compatible gateway. `vlm_model` is
+    // special: a vision model is a gateway TEXT model (context_limit > 0).
+    if (_isModelRefKnob(c.name)) {
       return _GenerativeModelPicker(
         label: c.name,
         description: c.description,
-        capability: capability,
+        textOnly: c.name.toLowerCase() == 'vlm_model',
         providers: _providers,
         initialValue: current == null ? '' : '$current',
         onSave: (v) => _saveExtConfig(extId, c.name, v),
@@ -910,20 +900,22 @@ class _ToolsDetailState extends State<_ToolsDetail> {
     );
   }
 
-  /// Map a config knob name to the model capability it selects, or null when
-  /// the knob is not a generation-model reference.
-  static String? _capabilityFor(String knob) {
-    final k = knob.toLowerCase();
-    if (k == 'vlm_model') return 'text'; // vision = a text model w/ image input
-    if (k == 'image_model' || k == 'image_edit_model') return 'image';
-    if (k == 'video_model') return 'video';
-    if (k == 'tts_model') return 'speech';
-    return null;
+  /// True when a config knob is a model reference (vision or a gateway
+  /// multimodal model).
+  static bool _isModelRefKnob(String knob) {
+    const names = {
+      'vlm_model',
+      'image_model',
+      'image_edit_model',
+      'video_model',
+      'tts_model',
+      'asr_model',
+    };
+    return names.contains(knob.toLowerCase());
   }
 
   Future<void> _saveExtConfig(String extId, String name, Object? value) async {
     if (value == null || '$value'.isEmpty) return;
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await widget.api.setToolConfigValue(extId, name, '$value');
       setState(() {
@@ -936,36 +928,33 @@ class _ToolsDetailState extends State<_ToolsDetail> {
           _config = {..._config, t.name: next};
         }
       });
-      messenger.showSnackBar(SnackBar(content: Text(context.l10n.saved)));
+      showToast(context, context.l10n.saved);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '$e',
-            style: TextStyle(color: colorsOf(context).destructive),
-          ),
-        ),
-      );
+      showErrorToast(context, '$e');
     }
   }
 }
 
-/// Provider/model dropdown for a generation-model config knob. Lists only
-/// models whose registered [capability] matches the knob; the saved value is
-/// a canonical `provider_id/model_id` reference, echoed back when set.
+/// Provider/model dropdown for a model-reference config knob. The saved value
+/// is a canonical `provider_id/model_id` reference, echoed back when set.
+///
+/// Multimodal models (image / image-edit / video / tts / asr) exist only on
+/// the single Vercel-compatible gateway, so [textOnly] picks text models
+/// (`context_limit > 0`) and everything else picks the gateway's multimodal
+/// models (`context_limit == 0`).
 class _GenerativeModelPicker extends StatefulWidget {
   final String label;
   final String description;
-  final String capability;
+  final bool textOnly;
   final Map<String, ProviderInfo> providers;
   final String initialValue;
   final ValueChanged<String> onSave;
   const _GenerativeModelPicker({
     required this.label,
     required this.description,
-    required this.capability,
     required this.providers,
     required this.onSave,
+    this.textOnly = false,
     this.initialValue = '',
   });
 
@@ -988,14 +977,26 @@ class _GenerativeModelPickerState extends State<_GenerativeModelPicker> {
   Widget build(BuildContext context) {
     final text = textOf(context);
     final colors = colorsOf(context);
-    // Flatten registered models of the matching capability into
-    // `provider_id/model_id` refs.
+    // Flatten registered models into `provider_id/model_id` refs.
+    //
+    // `vlm_model` (textOnly) wants a vision-capable TEXT model, so list text
+    // providers' models with a context window. All other knobs are multimodal
+    // and resolve to the single gateway provider's models.
+    const gatewayId = 'gateway';
     final refs = <(String, String)>[]; // (ref, modelName)
     for (final p in widget.providers.values) {
-      for (final m in p.models) {
-        final cap = m.capability.isEmpty ? 'text' : m.capability;
-        if (cap != widget.capability) continue;
-        refs.add(('${p.providerId}/${m.id}', m.name));
+      final isGateway = p.providerId == gatewayId;
+      if (widget.textOnly) {
+        if (isGateway) continue;
+        for (final m in p.models) {
+          if ((m.contextLimit ?? 0) <= 0) continue;
+          refs.add(('${p.providerId}/${m.id}', m.name));
+        }
+      } else {
+        if (!isGateway) continue;
+        for (final m in p.models) {
+          refs.add(('${p.providerId}/${m.id}', m.name));
+        }
       }
     }
     final valid = refs.any((r) => r.$1 == _selected) || _selected.isEmpty;
@@ -1278,8 +1279,7 @@ class _BackendsDetailState extends State<_BackendsDetail> {
     await Prefs.removeBackend(b.baseUrl);
     await _load();
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(context.l10n.saved)));
+    showToast(context, context.l10n.saved);
   }
 
   @override
@@ -1329,8 +1329,7 @@ class _BackendsDetailState extends State<_BackendsDetail> {
           leading: const Icon(Icons.add_rounded),
           title: Text(context.l10n.addBackend),
           onTap: () {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(context.l10n.addBackend)));
+            showToast(context, context.l10n.addBackend);
           },
         ),
       ],

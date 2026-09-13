@@ -1,11 +1,11 @@
 {
-    "name": "agent_app",
-    "short_name": "agent_app",
+    "name": "Agent",
+    "short_name": "Agent",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Standalone ABC agent chat client",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

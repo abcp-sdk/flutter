@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' as io;
 
 import 'dart:convert';
 
@@ -12,6 +11,8 @@ import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart' as wkt;
 
 import 'models.dart';
+import 'services/local_bytes_io.dart'
+    if (dart.library.js_interop) 'services/local_bytes_web.dart' as localbytes;
 import 'transport.dart';
 
 /// Parsed watch/prompt stream event.
@@ -137,8 +138,19 @@ class AgentBindApi {
 
   Future<String> prompt(String id, String prompt,
       {List<String>? attachments}) async {
+    // The file codes MUST be forwarded as attachment refs: the server inserts
+    // a `file` part per attachment and splices them into the turn. Omitting
+    // them silently drops every picked image / file / recording.
+    final refs = [
+      for (final code in attachments ?? const <String>[])
+        sdk.FileRef(code: code),
+    ];
     await for (final e
-        in _agent.prompt(sdk.PromptRequest(id: id, prompt: prompt))) {
+        in _agent.prompt(sdk.PromptRequest(
+      id: id,
+      prompt: prompt,
+      attachments: refs,
+    ))) {
       if (e.event == 'accepted') return e.params['message_id'] ?? '';
     }
     return '';
@@ -147,7 +159,15 @@ class AgentBindApi {
   // ---- attachment upload/download (agent.v1 file) ----
 
   Future<UploadedFile> uploadFile(UploadedFileSource src) async {
-    final bytes = await io.File(src.path).readAsBytes();
+    // Prefer the in-memory bytes (always present on web); fall back to reading
+    // the path on native when only a path was provided.
+    final bytes = src.bytes ??
+        (src.path.isNotEmpty
+            ? await localbytes.readLocalBytes(src.path)
+            : null);
+    if (bytes == null || bytes.isEmpty) {
+      throw StateError('attachment has no bytes: ${src.name}');
+    }
     final r = await _agent.ingestFile(sdk.IngestFileRequest(
       data: bytes,
       name: src.name,
@@ -178,6 +198,24 @@ class AgentBindApi {
         id: id, limit: limit, before: before ?? ''));
     final msgs = r.messages.map(messageFromPb).toList();
     return (msgs, msgs.length >= limit);
+  }
+
+  /// Incremental read anchored on a client-known message id (`after`). Returns
+  /// the messages appended since that anchor plus the chain's current tip id.
+  /// `resync=true` means the anchor is gone (withdrawn / re-pointed chain) and
+  /// the caller must discard its local copy and re-fetch from scratch.
+  Future<({List<Message> messages, bool resync, String tipId})> messagesAfter(
+    String id,
+    String after, {
+    int limit = 200,
+  }) async {
+    final r = await _agent.listMessages(sdk.ListMessagesRequest(
+        id: id, limit: limit, after: after));
+    return (
+      messages: r.messages.map(messageFromPb).toList(),
+      resync: r.resync,
+      tipId: r.tipId,
+    );
   }
 
   Future<String> switchModel(String id, String model,
@@ -248,9 +286,10 @@ class AgentBindApi {
 
   // ---- stream ----
 
-  Stream<StreamEvent> streamEvents(String sessionId) {
-    final sdkStream =
-        _agent.watchSession(sdk.WatchSessionRequest(id: sessionId));
+  Stream<StreamEvent> streamEvents(String sessionId, {String since = ''}) {
+    final sdkStream = _agent.watchSession(
+      sdk.WatchSessionRequest(id: sessionId, since: since),
+    );
     return sdkStream.map((e) {
       final params = StructUtils.toJson(e.params);
       final runId = params['run_id'];
@@ -300,7 +339,7 @@ class AgentBindApi {
                   id: m.id,
                   name: m.name.isNotEmpty ? m.name : m.id,
                   contextLimit: m.contextLimit.toInt(),
-                  capability: m.capability.isEmpty ? 'text' : m.capability,
+                  modelType: m.modelType,
                 ))
             .toList(),
       );
@@ -321,7 +360,7 @@ class AgentBindApi {
                   id: m.id,
                   name: m.name,
                   contextLimit: fixnum.Int64(m.contextLimit ?? 0),
-                  capability: m.capability,
+                  modelType: m.modelType,
                 ))
             .toList(),
       ),
@@ -331,14 +370,46 @@ class AgentBindApi {
   Future<void> deleteProvider(String pid) =>
       _agent.deleteProvider(sdk.DeleteProviderRequest(providerId: pid));
 
+  /// Ask a Vercel-compatible gateway which models it serves (its `/config`) and
+  /// classify each by the advertised `modelType`: language models get a real
+  /// context limit, multimodal models get 0. Returns the discovered models or
+  /// an error string.
+  Future<({List<ProviderModel> models, String error})> discoverGatewayModels({
+    required String providerId,
+    required String apiType,
+    required String baseUrl,
+    required String apiKey,
+  }) async {
+    final r = await _agent.discoverGatewayModels(
+      sdk.DiscoverGatewayModelsRequest(
+        providerId: providerId,
+        apiType: apiType,
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+      ),
+    );
+    return (
+      models: r.models
+          .map((m) => ProviderModel(
+                id: m.id,
+                name: m.name,
+                contextLimit: m.contextLimit.toInt(),
+                modelType: m.modelType,
+              ))
+          .toList(),
+      error: r.error,
+    );
+  }
+
   Future<Map<String, dynamic>> testProvider(
       {required String apiType,
       required String baseUrl,
       required String apiKey,
+      String providerId = '',
       String? model,
       String capability = 'text'}) async {
     final r = await _agent.testProvider(sdk.TestProviderRequest(
-      providerId: '',
+      providerId: providerId,
       apiType: apiType,
       baseUrl: baseUrl,
       apiKey: apiKey,
@@ -546,6 +617,7 @@ Message messageFromPb(sdk.Message m) {
     id: m.id,
     role: m.role,
     createdAt: m.createdAt.isEmpty ? null : m.createdAt,
+    prevId: m.prevId,
     parts: parts,
   );
 }

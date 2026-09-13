@@ -1,0 +1,41 @@
+# Flatpak manifest for the standalone agent app.
+#
+# Build prerequisites (run on a glibc host with `flutter`):
+#   1. flutter build linux --release   (media_kit needs a clang wrapper that
+#      sees the system C++ stdlib + extracted libmpv headers; see
+#      tool/build-appimage.sh for the wrapper.)
+#   2. tool/build-flatpak.sh           (assembles + exports + bundles)
+#
+# Runtime: org.freedesktop.Platform 24.08 provides GTK3/GLib/Pango/Cairo,
+# ffmpeg (libav* .61/.59) and the GL/EGL vendor stack; GPU rendering uses the
+# runtime's GL extension + the host's DRI driver (--device=dri).
+app-id: abcp.sdk.agent_app
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: agent_app
+
+finish-args:
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=host
+
+# The Flutter bundle is built on the host and placed under files/ by
+# tool/build-flatpak.sh (no in-sandbox Flutter build — the SDK has no Flutter).
+modules:
+  - name: agent-app
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/bin
+      - cp -a usr/bin/. /app/bin/
+      - cp -a usr/lib/. /app/bin/lib/
+      - install -Dm755 usr/bin/agent_app /app/bin/agent_app
+      - mkdir -p /app/share/applications
+      - install -Dm644 share/applications/abcp.sdk.agent_app.desktop /app/share/applications/abcp.sdk.agent_app.desktop
+    sources:
+      - type: dir
+        path: build/flatpak-files

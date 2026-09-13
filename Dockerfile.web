@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# Static host for the Flutter Web build of the standalone agent app. Base is an
+# image already mirrored into the in-cluster registry (so blob reuse works and
+# no docker.io round-trip is needed at push time).
+ARG REGISTRY=forgejo.develop.10.199.64.20.nip.io
+FROM ${REGISTRY}/root/alpine:3.24
+RUN apk add --no-cache nginx \
+    && mkdir -p /run/nginx /usr/share/nginx/html
+
+COPY build/web /usr/share/nginx/html
+
+RUN printf 'server {\n\
+    listen       8080;\n\
+    server_name  localhost;\n\
+    root   /usr/share/nginx/html;\n\
+    index  index.html;\n\
+    location = /index.html { add_header Cache-Control "no-cache"; }\n\
+    location = /flutter_service_worker.js { add_header Cache-Control "no-cache"; }\n\
+    location = /sqlite3.wasm { default_type application/wasm; add_header Cache-Control "no-cache"; }\n\
+    location = /drift_worker.js { default_type application/javascript; add_header Cache-Control "no-cache"; }\n\
+    location / { try_files $uri $uri/ /index.html; }\n\
+    location = /healthz { return 200 "{\\"ok\\":true,\\"name\\":\\"agent-web\\"}"; add_header Content-Type application/json; }\n\
+}\n' > /etc/nginx/http.d/default.conf
+RUN sed -i 's|/var/log/nginx/access.log|/dev/stdout|' /etc/nginx/nginx.conf 2>/dev/null || true
+
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]

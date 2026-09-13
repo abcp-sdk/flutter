@@ -1,7 +1,7 @@
 {
   "@@locale": "en",
   "@@context": "ZergX",
-  "appTitle": "ZergX",
+  "appTitle": "Agent",
   "gatewayUrl": "Gateway URL",
   "tokenLabel": "Token",
   "connect": "Connect",
@@ -40,6 +40,8 @@
   "copy": "Copy",
   "error": "Error",
   "undo": "Undo",
+  "retry": "Retry",
+  "editMessage": "Edit message",
   "undoTitle": "Undo this message?",
   "undoBody": "This deletes the message and everything after it.",
   "cancel": "Cancel",
@@ -60,11 +62,21 @@
     }
   },
   "attach": "Attach file",
+  "dropToAttach": "Drop to add as attachment",
+  "folderNotAllowed": "Folders can't be attached — drop individual files",
   "image": "image",
   "takePhoto": "Take photo",
   "chooseImage": "Choose from gallery",
   "chooseFile": "Choose file",
   "waitUpload": "Attachment is still uploading",
+  "uploadFailedRetry": "{arg1} attachment(s) failed to upload — retry or remove them before sending",
+  "@uploadFailedRetry": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
   "downloaded": "Downloaded to",
   "sessionSettings": "Session settings",
   "compactHistory": "Compact history",
@@ -135,10 +147,16 @@
   "voicePermission": "Microphone permission denied",
   "recordVoice": "Record voice",
   "voiceTooShort": "Recording too short",
+  "uploading": "Uploading…",
+  "uploadFailed": "Upload failed",
   "capText": "text",
   "capImage": "image",
   "capVideo": "video",
   "capSpeech": "speech",
+  "capTranscription": "ASR",
+  "capEmbedding": "embedding",
+  "capReranking": "rerank",
+  "capRealtime": "realtime",
   "newOrg": "New organization",
   "orgNameLabel": "Organization name",
   "newRepoIn": "New repo in {arg1}",
@@ -619,5 +637,29 @@
   "content": "Content",
   "metadata": "Metadata",
   "newSession": "New session",
-  "noSessions": "No sessions"
+  "noSessions": "No sessions",
+  "apiTypeGateway": "Vercel AI Gateway",
+  "providersSection": "Text providers",
+  "gatewaySection": "Multimodal gateway",
+  "gatewayTitle": "AI Gateway",
+  "gatewayHint": "The single Vercel-compatible gateway. Text models need a context length; models without one (image/video/speech/transcription) are used by tools.",
+  "gatewayModelsHint": "Add the gateway's models: give text models a context length, leave multimodal models empty.",
+  "multimodal": "multimodal",
+  "contextOptional": "optional — empty marks a multimodal model",
+  "testAs": "Test as",
+  "modelNameLabel": "display name…",
+  "discoverModels": "Auto-detect models",
+  "discoveringModels": "Detecting…",
+  "discoveredModels": "Discovered {arg1} models",
+  "@discoveredModels": {
+    "placeholders": {
+      "arg1": {
+        "type": "Object"
+      }
+    }
+  },
+  "gatewayTextModels": "Text / vision models",
+  "gatewayTextModelsHint": "Add a language model (needs a context length).",
+  "gatewayMultimodalModels": "Multimodal models",
+  "gatewayMultimodalModelsHint": "Add image/video/speech/transcription models (no context length)."
 }

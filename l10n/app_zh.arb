@@ -1,7 +1,7 @@
 {
   "@@locale": "zh",
   "@@context": "ZergX",
-  "appTitle": "ZergX",
+  "appTitle": "Agent",
   "gatewayUrl": "网关地址",
   "tokenLabel": "令牌",
   "connect": "连接",
@@ -40,6 +40,8 @@
   "copy": "复制",
   "error": "错误",
   "undo": "撤销",
+  "retry": "重试",
+  "editMessage": "编辑消息",
   "undoTitle": "撤销此消息？",
   "undoBody": "将删除该消息，并撤销之后的所有消息。",
   "cancel": "取消",
@@ -60,11 +62,21 @@
     }
   },
   "attach": "添加附件",
+  "dropToAttach": "松开以添加为附件",
+  "folderNotAllowed": "不支持拖入文件夹——请拖入单个文件",
   "image": "图片",
   "takePhoto": "拍照",
   "chooseImage": "从相册选图",
   "chooseFile": "选择文件",
   "waitUpload": "附件仍在上传中，请稍候",
+  "uploadFailedRetry": "{arg1} 个附件上传失败——请重试或移除后再发送",
+  "@uploadFailedRetry": {
+    "placeholders": {
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
   "downloaded": "已下载到",
   "sessionSettings": "会话设置",
   "compactHistory": "压缩历史",
@@ -135,10 +147,16 @@
   "voicePermission": "未获得麦克风权限",
   "recordVoice": "录制语音",
   "voiceTooShort": "录音太短",
+  "uploading": "上传中…",
+  "uploadFailed": "上传失败",
   "capText": "文本",
   "capImage": "图像",
   "capVideo": "视频",
   "capSpeech": "语音",
+  "capTranscription": "转写",
+  "capEmbedding": "向量",
+  "capReranking": "重排",
+  "capRealtime": "实时",
   "newOrg": "新建组织",
   "orgNameLabel": "组织名称",
   "newRepoIn": "在 {arg1} 新建仓库",
@@ -619,5 +637,22 @@
   "content": "内容",
   "metadata": "元数据",
   "newSession": "新会话",
-  "noSessions": "暂无会话"
+  "noSessions": "暂无会话",
+  "apiTypeGateway": "Vercel AI 网关",
+  "providersSection": "文本供应商",
+  "gatewaySection": "多模态网关",
+  "gatewayTitle": "AI 网关",
+  "gatewayHint": "唯一的 Vercel 兼容网关。文本模型需要上下文长度；无上下文长度的模型（图像/视频/语音/转写）供工具使用。",
+  "gatewayModelsHint": "添加网关模型：文本模型填上下文长度，多模态模型留空。",
+  "multimodal": "多模态",
+  "contextOptional": "可选 — 留空表示多模态模型",
+  "testAs": "测试方式",
+  "modelNameLabel": "显示名称…",
+  "discoverModels": "自动识别模型",
+  "discoveringModels": "识别中…",
+  "discoveredModels": "已识别 {arg1} 个模型",
+  "gatewayTextModels": "文本 / 视觉模型",
+  "gatewayTextModelsHint": "添加语言模型（需要上下文长度）。",
+  "gatewayMultimodalModels": "多模态模型",
+  "gatewayMultimodalModelsHint": "添加图像/视频/语音/转写模型（无上下文长度）。"
 }

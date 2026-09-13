@@ -1,11 +1,22 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' show FontFeature;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart'
+    show
+        Clipboard,
+        HardwareKeyboard,
+        KeyUpEvent,
+        KeyRepeatEvent,
+        LogicalKeyboardKey;
 import 'package:image_picker/image_picker.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:uuid/uuid.dart';
 
 import '../i18n.dart';
 import '../enums.dart';
@@ -16,12 +27,27 @@ import '../prefs.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/media_attachment.dart';
+import '../services/attachment_mime.dart';
+import '../services/clipboard_media.dart';
 import '../services/voice.dart';
 import '../widgets/message_bubble.dart';
 
 /// Conversation page shown when a session is open. Owns the chat header,
 /// message list and composer. It reads the active session from [store]; a
 /// single [MessagesController] is kept per chat-screen instance.
+/// Canonical `provider_id/model_id` reference for a text model.
+String modelRefOf(ModelInfo m) => '${m.providerId}/${m.id}';
+
+/// Clipboard-media paste and file drag-and-drop are desktop + web features.
+/// Android has no reachable path (a soft keyboard has no Ctrl+V key event, and
+/// the vendored plugins carry no Android native side), so both are disabled
+/// there to avoid dead code paths.
+bool get _supportsMediaPasteDrop =>
+    kIsWeb || defaultTargetPlatform != TargetPlatform.android;
+
+const Uuid _uuid = Uuid();
+
 class ChatSessionPageWidget extends StatefulWidget {
   final AppStore store;
   const ChatSessionPageWidget({super.key, required this.store});
@@ -52,6 +78,12 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
   // The session id the current _msg controller is bound to (set in _setup).
   String? _boundSid;
 
+  /// True while a file drag hovers the conversation (shows the drop overlay).
+  bool _dragging = false;
+
+  /// Disposer for the web document `paste` listener (no-op on native).
+  void Function()? _disposePasteListener;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +92,114 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     store.addListener(_onStore);
     store.refreshSessions();
     _scroll.addListener(_onScroll);
+    // Persist the typed text into the per-session draft as the user types, so
+    // leaving/returning never loses it.
+    _input.addListener(_persistDraft);
+    // Hardware-keyboard behavior: Enter sends, Ctrl/Cmd+Enter inserts a newline.
+    // (The on-screen soft keyboard's Enter arrives through the IME, NOT as a
+    // key event, so it falls through to `TextInputAction.newline` and inserts a
+    // newline — no send. That is the desired mobile behavior.)
+    _inputFocus.onKeyEvent = _onComposerKey;
+    // Web has no Ctrl+V key path that exposes clipboard FILES; a document-level
+    // `paste` listener does (the browser grants access during the event).
+    if (kIsWeb) {
+      _disposePasteListener = installWebPasteListener(_onWebPaste);
+    }
+  }
+
+  /// Upload a clipboard/dropped media item through the normal attachment path
+  /// (upload state, retry, draft persistence, all-or-nothing send).
+  void _addPastedMedia(ClipboardMedia media) {
+    if (!mounted) return;
+    _uploadOne(UploadedFileSource(
+      name: media.name,
+      mimeType: media.mime,
+      bytes: media.bytes,
+    ));
+  }
+
+  /// Web `paste` listener callback: only turn the clipboard into an attachment
+  /// while the composer is focused, so pasting an image into some other field
+  /// (e.g. a settings dialog) never silently adds an attachment.
+  void _onWebPaste(ClipboardMedia media) {
+    if (!mounted || !_inputFocus.hasFocus) return;
+    _addPastedMedia(media);
+  }
+
+  /// Key-event handler for the composer. Returns [KeyEventResult.handled] for
+  /// a bare hardware Enter (→ send), Ctrl/Cmd+Enter (→ newline) and Ctrl/Cmd+V
+  /// (→ paste media as an attachment, or plain text); every other key is
+  /// ignored. Only HARDWARE key events reach here — a phone's virtual keyboard
+  /// Enter is an IME action, so it never triggers a send.
+  KeyEventResult _onComposerKey(FocusNode node, KeyEvent event) {
+    final key = event.logicalKey;
+    final isEnter =
+        key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter;
+    final isPaste = key == LogicalKeyboardKey.keyV;
+    if (!isEnter && !isPaste) return KeyEventResult.ignored;
+    if (event is KeyUpEvent) return KeyEventResult.handled;
+    // A repeat (key held) must not spam sends / pastes.
+    if (event is KeyRepeatEvent) return KeyEventResult.handled;
+    final hw = HardwareKeyboard.instance;
+    final modifier = hw.isControlPressed || hw.isMetaPressed;
+    if (isPaste) {
+      // Only a modified V is a paste; a bare "v" must type normally.
+      if (!modifier) return KeyEventResult.ignored;
+      // Android has no hardware Ctrl+V path (and no clipboard-media plugin);
+      // fall through so the platform's own text paste handles it.
+      if (!_supportsMediaPasteDrop) return KeyEventResult.ignored;
+      // Web routes paste through the document `paste` listener (key events
+      // there cannot expose clipboard files); let the browser handle it.
+      if (kIsWeb) return KeyEventResult.ignored;
+      _pasteFromClipboard();
+      return KeyEventResult.handled;
+    }
+    if (modifier) {
+      // Ctrl/Cmd+Enter: insert a newline at the caret instead of sending.
+      _insertNewline();
+      return KeyEventResult.handled;
+    }
+    _send();
+    return KeyEventResult.handled;
+  }
+
+  /// Ctrl/Cmd+V on native: if the clipboard holds an image/file it becomes an
+  /// attachment; otherwise the plain text is inserted at the caret (the usual
+  /// editor behaviour).
+  Future<void> _pasteFromClipboard() async {
+    final media = await readClipboardMedia();
+    if (!mounted) return;
+    if (media != null) {
+      _addPastedMedia(media);
+      return;
+    }
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final txt = data?.text;
+    if (txt == null || txt.isEmpty || !mounted) return;
+    final sel = _input.selection;
+    final text = _input.text;
+    final start = sel.isValid ? sel.start : text.length;
+    final end = sel.isValid ? sel.end : text.length;
+    _input.value = TextEditingValue(
+      text: text.replaceRange(start, end, txt),
+      selection: TextSelection.collapsed(offset: start + txt.length),
+    );
+    if (mounted) setState(() {});
+    _persistDraft();
+  }
+
+  void _insertNewline() {
+    final sel = _input.selection;
+    final text = _input.text;
+    final start = sel.isValid ? sel.start : text.length;
+    final end = sel.isValid ? sel.end : text.length;
+    final next = text.replaceRange(start, end, '\n');
+    _input.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + 1),
+    );
+    if (mounted) setState(() {});
+    _persistDraft();
   }
 
   void _onScroll() {
@@ -118,8 +258,15 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // Recreating would tear down and reopen the stream unnecessarily.
     if (_boundSid == sid && _msg != null) return;
     _boundSid = sid;
+    // Restore this session's unsent draft (typed text + pending attachments) so
+    // leaving and returning never loses it.
+    _restoreDraft(sid);
     _msg?.dispose();
-    final m = MessagesController(api: store.api, getSessionId: () => sid);
+    final m = MessagesController(
+      api: store.api,
+      getSessionId: () => sid,
+      local: store.local,
+    );
     m.onSessionEvent((event, params) {
       if (event == 'turn-complete') {
         store.bumpSessionRevision();
@@ -151,53 +298,135 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     if (m == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
-      if (!_initialScrollDone) {
+      // Pin to the newest message on first paint AND whenever we are still
+      // following the bottom. Media (images / video posters) loads
+      // asynchronously and grows the list AFTER the first frame, so this must
+      // re-pin on every content change — not only once — or the view can end
+      // up scrolled partway up with the newest message below the fold.
+      if (!_initialScrollDone || _followBottom) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
         _initialScrollDone = true;
-      } else if (m.sending && _followBottom) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
   }
 
+  /// Re-pin to the bottom when the list's content size changes (e.g. an async
+  /// image finishes loading and makes the scrollable taller), while the user is
+  /// still following the newest message.
+  bool _onScrollMetrics(ScrollMetricsNotification n) {
+    if (_followBottom && _scroll.hasClients && n.depth == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients || !_followBottom) return;
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+    }
+    return false;
+  }
+
   @override
   void dispose() {
+    // The draft (text + attachments) already lives on the store, so it survives
+    // this widget being torn down — just detach the listeners.
+    _persistDraft();
+    _disposePasteListener?.call();
     _voiceTicker?.cancel();
     _voice.dispose();
     _scroll.removeListener(_onScroll);
     store.removeListener(_onStore);
     _msg?.removeListener(_onMsg);
     _msg?.dispose();
+    _input.removeListener(_persistDraft);
     _input.dispose();
     _inputFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
+  /// Mirror the current composer state into the store's per-session draft.
+  void _persistDraft() {
+    final sid = _boundSid;
+    if (sid == null) return;
+    store.saveDraftText(sid, _input.text);
+  }
+
+  /// Mirror the pending attachments into the store's per-session draft. Called
+  /// whenever the attachment list changes (add / upload-complete / error /
+  /// remove / send).
+  void _persistAttachments() {
+    final sid = _boundSid;
+    if (sid == null) return;
+    store.saveDraftAttachments(sid, _pendingAttachments);
+  }
+
+  /// Re-seed the composer from the store's draft for [sid] (called when the
+  /// bound session changes, e.g. re-entering a conversation).
+  void _restoreDraft(String sid) {
+    final d = store.chatDrafts[sid];
+    if (d == null) {
+      if (_input.text.isNotEmpty) _input.clear();
+      _pendingAttachments = [];
+      return;
+    }
+    if (_input.text != d.text) {
+      _input.text = d.text;
+      _input.selection = TextSelection.collapsed(offset: d.text.length);
+    }
+    _pendingAttachments = List.of(d.attachments);
+  }
+
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty && _pendingAttachments.isEmpty) return;
-    // Never send while an attachment is still uploading.
-    if (_pendingAttachments.any((a) => a.isUploading)) {
+    if (_sending || (_msg?.sending ?? false)) return;
+    setState(() => _sending = true);
+    // If any attachment is still uploading, spin the send button and WAIT for
+    // every in-flight upload to finish before sending. Await a retained copy of
+    // the futures directly (a plain `await` cannot be interrupted, so the
+    // spinner reliably reflects a real wait); catch errors so `Future.wait`
+    // itself never throws here — the per-attachment error state is inspected
+    // below instead.
+    if (_inflightUploads.isNotEmpty) {
+      final pending = List<Future<void>>.of(_inflightUploads);
+      await Future.wait(pending.map((f) => f.catchError((_) {})));
+      if (!mounted) {
+        _sending = false;
+        return;
+      }
+    }
+    // ALL-or-NOTHING: every pending attachment must have uploaded successfully.
+    // If any failed (or is still without a code) the send is refused — the
+    // batch stays so the user can retry the failed one; we never send a
+    // partial batch.
+    final failed = _pendingAttachments
+        .where((a) => a.hasError || a.code.isEmpty)
+        .toList();
+    if (failed.isNotEmpty) {
+      setState(() => _sending = false);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(context.l10n.waitUpload)));
+        showToast(context, context.l10n.uploadFailedRetry('${failed.length}'));
       }
       return;
     }
-    // Drop errored attachments from the outgoing batch.
-    final attachments = _pendingAttachments.where((a) => !a.hasError).toList();
+    final attachments = List<UploadedFile>.of(_pendingAttachments);
     _pendingAttachments = [];
     _input.clear();
+    // The draft is spent: clear it so returning to this session starts clean.
+    if (_boundSid != null) store.clearDraft(_boundSid!);
     // A freshly sent message should always land at the bottom.
     _followBottom = true;
-    setState(() {});
+    setState(() => _sending = false);
     await _msg?.send(text, attachments);
     _inputFocus.requestFocus();
   }
 
   List<UploadedFile> _pendingAttachments = [];
   final ImagePicker _picker = ImagePicker();
+
+  /// Send is in its "finishing uploads then send" state (button spins).
+  bool _sending = false;
+
+  /// Uploads currently in flight (so send can await them all first).
+  final Set<Future<void>> _inflightUploads = {};
 
   // ---- voice recording ----------------------------------------------------
   final VoiceRecorder _voice = VoiceRecorder();
@@ -214,8 +443,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     final ok = await _voice.start();
     if (!mounted) return;
     if (!ok) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(context.l10n.voicePermission)));
+      showToast(context, context.l10n.voicePermission);
       return;
     }
     setState(() {
@@ -233,9 +461,15 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     _voiceTicker = null;
     final src = await _voice.stop();
     if (!mounted) return;
-    setState(() => _recording = false);
+    setState(() {
+      _recording = false;
+    });
     if (src != null) {
       _uploadOne(src);
+    } else if (mounted) {
+      // Nothing recorded (too short / start raced) — tell the user instead of
+      // silently doing nothing.
+      showToast(context, context.l10n.voiceTooShort);
     }
   }
 
@@ -294,8 +528,19 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       return;
     }
     if (x == null) return;
+    // image_picker writes into a cache dir named with a UUID (e.g.
+    // 5270fc2a-…-1783/image_picker_xxx.jpg) and XFile.name is the last path
+    // segment — that UUID garbage. Give it a clean timestamped name.
+    final name = _displayName(
+      x.name,
+      kind: (x.mimeType ?? '').startsWith('image/') ? 'image' : 'file',
+    );
     _uploadOne(
-      UploadedFileSource(path: x.path, name: x.name, mimeType: _mimeOf(x.name)),
+      UploadedFileSource(
+        path: x.path,
+        name: name,
+        mimeType: x.mimeType ?? mimeOfName(x.name),
+      ),
     );
   }
 
@@ -306,15 +551,47 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       final path = f.path;
       if (path == null) continue;
       _uploadOne(
-        UploadedFileSource(path: path, name: f.name, mimeType: _mimeOf(f.name)),
+        UploadedFileSource(
+          path: path,
+          name: _displayName(f.name, path: path),
+          mimeType: mimeOfName(f.name),
+        ),
       );
     }
+  }
+
+  /// A human-friendly attachment name. Drops a UUID-ish basename (image_picker
+  /// temp names) in favour of `<kind>-<uuid>.<ext>`, keeping the extension.
+  static String _displayName(String raw, {String? path, String kind = 'file'}) {
+    final base = raw.split('/').last.split('\\').last;
+    final dot = base.lastIndexOf('.');
+    final ext = dot > 0 ? base.substring(dot) : _extFromPath(path) ?? '';
+    // A UUID basename is 8-4-4-4-12 hex (image_picker temp files).
+    final isUuid = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(dot > 0 ? base.substring(0, dot) : base);
+    if (isUuid || base.isEmpty || dot == 0) {
+      return '$kind-${_uuid.v4()}$ext';
+    }
+    return base;
+  }
+
+  static String? _extFromPath(String? p) {
+    if (p == null) return null;
+    final dot = p.lastIndexOf('.');
+    return dot > 0 ? p.substring(dot) : null;
   }
 
   /// Upload a single file and append it to the pending list. The local path
   /// is kept so an image can render a thumbnail while uploading (and before
   /// the bytes are ever needed).
-  Future<void> _uploadOne(UploadedFileSource src) async {
+  Future<void> _uploadOne(UploadedFileSource src) {
+    final future = _uploadOneInner(src);
+    _inflightUploads.add(future);
+    return future.whenComplete(() => _inflightUploads.remove(future));
+  }
+
+  Future<void> _uploadOneInner(UploadedFileSource src) async {
     setState(() {
       _pendingAttachments = [
         ..._pendingAttachments,
@@ -325,6 +602,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         ).uploading(src.path),
       ];
     });
+    _persistAttachments();
     try {
       final uploaded = await store.api.uploadFile(src);
       if (!mounted) return;
@@ -334,6 +612,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
             if (a.code == '' && a.name == src.name) uploaded else a,
         ];
       });
+      _persistAttachments();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -342,119 +621,83 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
             if (a.code == '' && a.name == src.name) a.uploadError('$e') else a,
         ];
       });
+      _persistAttachments();
     }
-  }
-
-  static String _mimeOf(String name) {
-    final lower = name.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
-    if (lower.endsWith('.gif')) return 'image/gif';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.svg')) return 'image/svg+xml';
-    if (lower.endsWith('.pdf')) return 'application/pdf';
-    if (lower.endsWith('.txt') || lower.endsWith('.md')) return 'text/plain';
-    return 'application/octet-stream';
   }
 
   Widget _attachmentRow(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Wrap(
-        spacing: AppSpacing.xs,
-        runSpacing: AppSpacing.xs,
-        children: [
-          for (final a in _pendingAttachments) _attachmentChip(context, a),
-        ],
+      // Size every tile so exactly THREE fit per line; the tiles are square and
+      // identical (no filename), with slight rounding on tablets.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = AppSpacing.xs;
+          const cols = 3;
+          final dim =
+              ((constraints.maxWidth - gap * (cols - 1)) / cols).clamp(40.0, 72.0);
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final a in _pendingAttachments)
+                _attachmentChip(context, a, dim),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _attachmentChip(BuildContext context, UploadedFile a) {
+  Widget _attachmentChip(BuildContext context, UploadedFile a, double dim) {
+    // A small uniform square tile: thumbnail (image) or type icon, no name. A
+    // corner badge shows upload state / retry / remove; tapping opens the full
+    // media (image full-screen / audio player).
     final colors = colorsOf(context);
-    final text = textOf(context);
-    final isImg = (a.mime ?? '').startsWith('image/');
-    // Local thumbnails render straight from disk; remote images preview only
-    // after upload (code set) via the bubble; here we show the offline thumb.
-    Widget leading;
-    if (isImg && a.localPath.isNotEmpty) {
-      leading = ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: Image.file(
-          File(a.localPath),
-          width: 34,
-          height: 34,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => const SizedBox(
-            width: 34,
-            height: 34,
-            child: Icon(Icons.broken_image_outlined, size: 16),
-          ),
-        ),
-      );
-    } else {
-      leading = Icon(
-        Icons.attach_file_rounded,
-        size: 14,
-        color: colors.mutedForeground,
-      );
-    }
-    Widget trailing;
+    Widget overlay;
     if (a.isUploading) {
-      trailing = const SizedBox(
-        width: 14,
-        height: 14,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      overlay = const _TileBadge(
+        child: SizedBox(
+          width: 10,
+          height: 10,
+          child: CircularProgressIndicator(strokeWidth: 1.6, color: Colors.white),
+        ),
       );
     } else if (a.hasError) {
-      trailing = InkWell(
-        onTap: () => _uploadOne(
-          UploadedFileSource(
-            path: a.localPath,
-            name: a.name ?? '',
-            mimeType: a.mime ?? '',
-          ),
-        ),
-        child: Icon(Icons.refresh_rounded, size: 16, color: colors.warning),
+      overlay = _TileBadge(
+        color: colors.destructive,
+        onTap: () => _uploadOne(UploadedFileSource(
+          path: a.localPath,
+          name: a.name ?? '',
+          mimeType: a.mime ?? '',
+        )),
+        child: const Icon(Icons.refresh_rounded, size: 12, color: Colors.white),
       );
     } else {
-      trailing = InkWell(
+      overlay = _TileBadge(
         onTap: () {
           setState(() {
-            _pendingAttachments = _pendingAttachments
-                .where((x) => x != a)
-                .toList();
+            _pendingAttachments =
+                _pendingAttachments.where((x) => x != a).toList();
           });
+          _persistAttachments();
         },
-        child: Icon(
-          Icons.cancel_rounded,
-          size: 16,
-          color: colors.mutedForeground,
-        ),
+        child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
       );
     }
-    return Material(
-      color: colors.muted.withValues(alpha: 0.5),
-      borderRadius: AppRadius.rSm,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xs,
-          vertical: 2,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            leading,
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              a.name ?? a.code,
-              style: text.micro.copyWith(color: colors.foreground),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            trailing,
-          ],
-        ),
-      ),
+    return AttachmentTag(
+      api: store.api,
+      code: a.code,
+      name: a.name ?? '',
+      mime: a.mime,
+      size: a.size,
+      localPath: a.localPath,
+      dimension: dim,
+      onTap: a.code.isEmpty
+          ? null
+          : () => showAttachment(
+              context, store.api, a.code, a.name, a.mime, a.size),
+      overlay: overlay,
     );
   }
 
@@ -483,20 +726,123 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
           store.closeSession();
         }
       },
-      child: Column(
-        children: [
-          SafeArea(
-            bottom: false,
+      child: _dropEnabled ? _wrapDropTarget(colors) : _conversationBody(colors),
+    );
+  }
+
+  /// Whether this platform accepts file drag-and-drop (desktop + web only).
+  bool get _dropEnabled => _supportsMediaPasteDrop;
+
+  /// The conversation column + optional drop overlay, without any drop target.
+  Widget _conversationBody(AppColors colors) {
+    return Stack(
+      children: [
+        Column(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _topBar(context),
+                  Divider(
+                      height: 1, color: colors.border.withValues(alpha: 0.5)),
+                ],
+              ),
+            ),
+            Expanded(child: _messageList()),
+            _composer(context),
+          ],
+        ),
+        if (_dragging) _dropOverlay(context),
+      ],
+    );
+  }
+
+  /// Wrap the conversation in a [DropTarget] (desktop + web): dragging files or
+  /// images onto it attaches them; directories are refused with a hint.
+  Widget _wrapDropTarget(AppColors colors) {
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: _onDropFiles,
+      child: _conversationBody(colors),
+    );
+  }
+
+  /// Handle a drop on the conversation: every FILE becomes an attachment (the
+  /// same upload path as a picked/clipboard file). Directories are refused —
+  /// a drop that is only a directory shows a hint instead of silently doing
+  /// nothing.
+  Future<void> _onDropFiles(DropDoneDetails details) async {
+    if (mounted) setState(() => _dragging = false);
+    final accepted = <DropItem>[];
+    var rejectedDir = false;
+    for (final item in details.files) {
+      if (item is DropItemDirectory) {
+        rejectedDir = true;
+        continue;
+      }
+      accepted.add(item);
+    }
+    if (rejectedDir && mounted) {
+      showToast(context, context.l10n.folderNotAllowed);
+    }
+    for (final item in accepted) {
+      final name = item.name.isNotEmpty
+          ? item.name
+          : 'file-${const Uuid().v4()}';
+      final mime = (item.mimeType ?? '').isNotEmpty
+          ? item.mimeType!
+          : mimeOfName(name);
+      // Dropped items carry in-memory bytes on web; on desktop a path. XFile's
+      // readAsBytes covers both (native reads the file, web fetches the blob).
+      Uint8List? bytes;
+      try {
+        bytes = await item.readAsBytes();
+      } catch (_) {
+        bytes = null;
+      }
+      if (bytes == null || bytes.isEmpty) continue;
+      _uploadOne(UploadedFileSource(
+        path: kIsWeb ? '' : item.path,
+        name: name,
+        mimeType: mime,
+        bytes: bytes,
+      ));
+    }
+  }
+
+  /// Full-area translucent overlay shown while a drag hovers the conversation.
+  Widget _dropOverlay(BuildContext context) {
+    final colors = colorsOf(context);
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          color: colors.primary.withValues(alpha: 0.08),
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: colors.card,
+              borderRadius: AppRadius.rLg,
+              border: Border.all(color: colors.primary, width: 1.5),
+            ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _topBar(context),
-                Divider(height: 1, color: colors.border.withValues(alpha: 0.5)),
+                Icon(Icons.upload_file_rounded, size: 32, color: colors.primary),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  context.l10n.dropToAttach,
+                  style: textOf(context).body,
+                ),
               ],
             ),
           ),
-          Expanded(child: _messageList()),
-          _composer(context),
-        ],
+        ),
       ),
     );
   }
@@ -521,69 +867,77 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     final s = store.activeSession;
     final last = (s?.lastInputTokens ?? 0) + (s?.lastOutputTokens ?? 0);
     final ctxLabel = _fmtContext(last);
+    final menu = PopupMenuButton<String>(
+      onSelected: (v) => _menuAction(v),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'compact',
+          child: Text(context.l10n.compactHistory),
+        ),
+        PopupMenuItem(value: 'mailbox', child: Text(context.l10n.mailbox)),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: 'fork', child: Text(context.l10n.fork)),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text(
+            context.l10n.deleteSession,
+            style: TextStyle(color: colors.destructive),
+          ),
+        ),
+      ],
+    );
     return SafeArea(
       bottom: false,
       child: SizedBox(
         height: AppBars.height,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, size: 22),
-                onPressed: () => store.popPage(),
-              ),
-              // Status lamp: green idle / yellow running.
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _msg?.sending == true
-                      ? colors.warning
-                      : colors.success,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              // Context size (was the composer footer): e.g. "1.8k".
-              if (ctxLabel.isNotEmpty) ...[
-                Text(
-                  ctxLabel,
-                  style: text.micro.copyWith(
-                    color: colors.mutedForeground,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Session name pill — CENTERED in the bar (tap opens the info
+            // dialog), independent of how wide the side controls are.
+            Center(child: _SessionNamePill(session: s, onEdit: _showSettings)),
+            // Left cluster: back + status lamp + context size.
+            Positioned(
+              left: AppSpacing.xs,
+              top: 0,
+              bottom: 0,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                    onPressed: () => store.popPage(),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-              ],
-              // Session name → tap opens a centered info dialog (provider /
-              // model / preset / agent language) with an Edit action.
-              _SessionNamePill(session: s, onEdit: _showSettings),
-              const Spacer(),
-              PopupMenuButton<String>(
-                onSelected: (v) => _menuAction(v),
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'compact',
-                    child: Text(context.l10n.compactHistory),
-                  ),
-                  PopupMenuItem(
-                    value: 'mailbox',
-                    child: Text(context.l10n.mailbox),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem(value: 'fork', child: Text(context.l10n.fork)),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text(
-                      context.l10n.deleteSession,
-                      style: TextStyle(color: colors.destructive),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _msg?.sending == true
+                          ? colors.warning
+                          : colors.success,
                     ),
                   ),
+                  if (ctxLabel.isNotEmpty) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      ctxLabel,
+                      style: text.micro.copyWith(
+                        color: colors.mutedForeground,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            ],
-          ),
+            ),
+            // Right cluster: menu.
+            Positioned(
+              right: AppSpacing.xs,
+              top: 0,
+              bottom: 0,
+              child: menu,
+            ),
+          ],
         ),
       ),
     );
@@ -642,8 +996,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
         await store.deleteSession(sid);
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(context.l10n.failed('$e'))));
+        showErrorToast(context, context.l10n.failed('$e'));
       }
     }
   }
@@ -660,8 +1013,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       await store.refreshSessions();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(context.l10n.failed('$e'))));
+      showErrorToast(context, context.l10n.failed('$e'));
     }
   }
 
@@ -674,21 +1026,16 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       if (created) {
         // A compaction checkpoint was created: reopen the conversation so the
         // new "历史已压缩" summary message renders at the top of the tail.
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.historyCompacted)));
+        showToast(context, context.l10n.historyCompacted);
         await _setup();
       } else {
         // Nothing to fold (the agent returns {ok:false}); the current
         // conversation is unchanged.
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.nothingToCompact)));
+        showToast(context, context.l10n.nothingToCompact);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        showErrorToast(context, '$e');
       }
     }
   }
@@ -701,59 +1048,53 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // store and discard the user's in-progress selection.
     //
     // The session model is a canonical "provider_id/model_id" reference (a
-    // bare model id is never resolved by flat lookup). Split it so the
-    // provider dropdown pre-selects the owner.
-    final currentModel = store.activeSession?.model ?? '';
-    final slash = currentModel.indexOf('/');
-    String provider = slash > 0 ? currentModel.substring(0, slash) : '';
-    String model = slash > 0 ? currentModel.substring(slash + 1) : currentModel;
+    // bare model id is never resolved by flat lookup). A SINGLE dropdown lists
+    // every text model as "provider_id/model_id", so provider and model are
+    // never chosen apart.
+    String selectedRef = store.activeSession?.model ?? '';
     String variant = store.activeSession?.variant ?? '';
     String preset = store.activeSession?.preset ?? '';
     String locale = store.activeSession?.locale ?? '';
-    // Cascading provider → model. provider_id is REQUIRED by the agent (a
-    // global model list is rejected), so the provider dropdown has no "all"
-    // option: pick the owner of the session's current model (else the first
-    // registered provider), then load only that provider's models.
+    // `listModels` is per-provider, so fetch every provider's text models and
+    // flatten them into one ref list.
     final providerIds = _providers.keys.toList();
-    if (provider.isEmpty && providerIds.isNotEmpty)
-      provider = providerIds.first;
-    List<ModelInfo> modelsForProvider = [];
+    List<ModelInfo> allModels = [];
     List<ModelVariantInfo> variantsForModel = [];
     bool loadingModels = true;
     void syncVariants() {
-      final sel = modelsForProvider.where((m) => m.id == model);
+      final sel = allModels.where((m) => modelRefOf(m) == selectedRef);
       variantsForModel = sel.isEmpty ? const [] : sel.first.variants;
       if (!variantsForModel.any((v) => v.id == variant)) variant = '';
     }
 
     Future<void> loadModels(void Function(void Function()) setState) async {
       setState(() => loadingModels = true);
-      try {
-        final list = await store.api.models(providerId: provider);
-        setState(() {
-          modelsForProvider = list;
-          loadingModels = false;
-          // Keep the current model if still valid, else default to the first.
-          if (!list.any((m) => m.id == model)) {
-            model = list.isNotEmpty ? list.first.id : model;
-          }
-          syncVariants();
-        });
-      } catch (_) {
-        if (mounted) setState(() => loadingModels = false);
+      final out = <ModelInfo>[];
+      for (final pid in providerIds) {
+        try {
+          out.addAll(await store.api.models(providerId: pid));
+        } catch (_) {}
       }
+      if (!mounted) return;
+      setState(() {
+        allModels = out;
+        loadingModels = false;
+        // Keep the current model if still valid, else default to the first.
+        if (!out.any((m) => modelRefOf(m) == selectedRef) && out.isNotEmpty) {
+          selectedRef = modelRefOf(out.first);
+        }
+        syncVariants();
+      });
     }
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          if (loadingModels &&
-              modelsForProvider.isEmpty &&
-              provider.isNotEmpty) {
+          if (loadingModels && allModels.isEmpty) {
             // First open: kick off the initial model load once.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (modelsForProvider.isEmpty) loadModels(setState);
+              if (allModels.isEmpty) loadModels(setState);
             });
           }
           final presetOptions = [
@@ -775,43 +1116,30 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1) Provider. 2) Model (fetched for the chosen provider).
+                  // A SINGLE "provider_id/model_id" dropdown (text models across
+                  // every provider), so provider and model are never picked apart.
                   DropdownButtonFormField<String>(
-                    initialValue: providerIds.contains(provider)
-                        ? provider
-                        : null,
+                    initialValue: selectedRef.isEmpty ? null : selectedRef,
+                    isExpanded: true,
                     items: [
-                      if (providerIds.isEmpty)
+                      if (allModels.isEmpty)
                         DropdownMenuItem(value: '', child: Text(ctx.l10n.none)),
-                      for (final pid in providerIds)
-                        DropdownMenuItem(value: pid, child: Text(pid)),
-                    ],
-                    onChanged: (v) {
-                      provider = v ?? '';
-                      setState(() => modelsForProvider = []);
-                      loadModels(setState);
-                    },
-                    decoration: InputDecoration(labelText: ctx.l10n.providers),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  DropdownButtonFormField<String>(
-                    initialValue: model.isEmpty ? null : model,
-                    items: [
-                      if (modelsForProvider.isEmpty)
-                        DropdownMenuItem(value: '', child: Text(ctx.l10n.none)),
-                      for (final m in modelsForProvider)
+                      for (final m in allModels)
                         DropdownMenuItem(
-                          value: m.id,
-                          child: Text(m.name.isNotEmpty ? m.name : m.id),
+                          value: modelRefOf(m),
+                          child: Text(modelRefOf(m)),
                         ),
                       // Keep the session's current model selectable even if the
                       // registry no longer lists it.
-                      if (model.isNotEmpty &&
-                          !modelsForProvider.any((m) => m.id == model))
-                        DropdownMenuItem(value: model, child: Text(model)),
+                      if (selectedRef.isNotEmpty &&
+                          !allModels.any((m) => modelRefOf(m) == selectedRef))
+                        DropdownMenuItem(
+                          value: selectedRef,
+                          child: Text(selectedRef),
+                        ),
                     ],
                     onChanged: (v) => setState(() {
-                      model = v ?? '';
+                      selectedRef = v ?? '';
                       syncVariants();
                     }),
                     decoration: InputDecoration(labelText: ctx.l10n.modelLabel),
@@ -887,11 +1215,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                 onPressed: () async {
                   Navigator.pop(ctx);
                   final updates = <String, dynamic>{};
-                  // Model is stored as a canonical provider/model reference.
-                  if (model.isNotEmpty) {
-                    updates['model'] = provider.isEmpty
-                        ? model
-                        : '$provider/$model';
+                  // Model is the selected "provider_id/model_id" ref.
+                  if (selectedRef.isNotEmpty) {
+                    updates['model'] = selectedRef;
                   }
                   updates['variant'] = variant;
                   if (preset.isNotEmpty) updates['preset'] = preset;
@@ -903,8 +1229,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                     _applySession(updated);
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text('$e')));
+                      showErrorToast(context, '$e');
                     }
                   }
                 },
@@ -922,42 +1247,60 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     if (m == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    return ListView.builder(
-      controller: _scroll,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.md,
-      ),
-      itemCount: m.sorted.length + (m.hasMore ? 1 : 0),
-      itemBuilder: (context, i) {
-        if (i == 0 && m.hasMore) {
-          return Center(
-            child: TextButton(
-              onPressed: m.loading ? null : () => m.loadMore(),
-              child: Text(
-                m.loading ? context.l10n.loading : context.l10n.loadEarlier,
+    // NotificationListener on ScrollMetrics: a media card that finishes loading
+    // AFTER first paint makes the list taller; while following the newest
+    // message, re-pin so the newest message never sits below the fold.
+    //
+    // NOTE: no pull-to-refresh here. In a chat, pulling down is the platform
+    // convention for "load earlier history" (handled in [_onScroll]),
+    // and new messages already arrive over the live stream. A manual "rebuild
+    // the cache" escape hatch lives in the top-bar menu instead.
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: _onScrollMetrics,
+      child: ListView.builder(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        itemCount: m.sorted.length + (m.hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == 0 && m.hasMore) {
+            return Center(
+              child: TextButton(
+                onPressed: m.loading ? null : () => m.loadMore(),
+                child: Text(
+                  m.loading ? context.l10n.loading : context.l10n.loadEarlier,
+                ),
               ),
-            ),
-          );
-        }
-        final msg = m.sorted[i - (m.hasMore ? 1 : 0)];
-        return MessageBubble(
-          key: ValueKey(msg.id),
-          msg: msg,
-          onUndo: (id) => m.revert(id),
+            );
+          }
+          final msg = m.sorted[i - (m.hasMore ? 1 : 0)];
+          return MessageBubble(
+            key: ValueKey(msg.id),
+            msg: msg,
+            onUndo: (id) => m.revert(id),
+            // Retry / edit withdraw this message (and everything after it),
+            // then resend it (as-is or with edited text) keeping its
+            // attachments.
+            onResend: (text) => m.resendFrom(msg, text),
+            onEditText: (text) => m.resendFrom(msg, text),
 
-          api: store.api,
-          org: store.activeSession?.org ?? '',
-          repo: store.activeSession?.repo ?? '',
-          branch: store.activeSession?.branch ?? '',
-        );
-      },
+            api: store.api,
+            org: store.activeSession?.org ?? '',
+            repo: store.activeSession?.repo ?? '',
+            branch: store.activeSession?.branch ?? '',
+          );
+        },
+      ),
     );
   }
 
   Widget _composer(BuildContext context) {
     final m = _msg;
     final colors = colorsOf(context);
+    final text = textOf(context);
     final sending = m?.sending ?? false;
     final hasContent =
         _input.text.trim().isNotEmpty || _pendingAttachments.isNotEmpty;
@@ -975,7 +1318,7 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
             AppSpacing.md,
             AppSpacing.xs,
             AppSpacing.md,
-            AppSpacing.xs,
+            0,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1003,28 +1346,46 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                   Expanded(
                     child: _voiceMode
                         ? _holdToTalkButton(context)
-                        : ConstrainedBox(
-                            // Same box height as the hold-to-talk button so
-                            // toggling voice/keyboard does not resize the bar.
-                            constraints: const BoxConstraints(
-                              minHeight: _composerFieldHeight,
-                            ),
+                        : _composerBox(
+                            // The SAME shell as the hold-to-talk button, so both
+                            // are exactly the same height (min 42, growing with
+                            // wrapped text). The TextField itself contributes no
+                            // decoration padding (isCollapsed + no border), so
+                            // the shell — not the field's decorator — owns the
+                            // fill, radius and height.
                             child: TextField(
                               controller: _input,
                               focusNode: _inputFocus,
-                              // Keep typing while the agent works (IM convention);
-                              // only the send/plus button morphs.
                               minLines: 1,
                               maxLines: 6,
+                              // Use the SAME text style as the hold-to-talk
+                              // label so the field and the button scale
+                              // identically and line up pixel-for-pixel.
+                              style: text.body,
                               textInputAction: TextInputAction.newline,
                               textAlignVertical: TextAlignVertical.center,
-                              onChanged: (_) => setState(() {}),
+                              onChanged: (_) {
+                                setState(() {});
+                                _persistDraft();
+                              },
                               decoration: InputDecoration(
-                                isDense: true,
+                                isCollapsed: true,
+                                // The shared shell owns the fill/radius/border.
+                                // Disable EVERY field border too, else the
+                                // theme's OutlineInputBorder (enabled/focused)
+                                // draws a second inner box inside the shell.
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: AppSpacing.md,
-                                  vertical: 0,
                                 ),
+                                hintStyle: text.body.copyWith(
+                                    color: colors.mutedForeground),
                                 hintText: _pendingAttachments.isEmpty
                                     ? context.l10n.typeMessage
                                     : '',
@@ -1033,8 +1394,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                           ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  // Right: one morphing button — abort (running) / send (has
-                  // content) / plus (empty → open attach sheet).
+                  // Right: one morphing button — abort (running) / spinner
+                  // (finishing uploads before send) / send (has content) /
+                  // plus (empty → open attach sheet).
                   sending
                       ? IconButton.filled(
                           style: IconButton.styleFrom(
@@ -1044,6 +1406,18 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
                           tooltip: context.l10n.abort,
                           icon: const Icon(Icons.stop_rounded, size: 20),
                           onPressed: () => m?.stop(),
+                        )
+                      : _sending
+                      ? IconButton.filled(
+                          icon: const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          onPressed: null,
                         )
                       : hasContent
                       ? IconButton.filled(
@@ -1064,6 +1438,25 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     );
   }
 
+  /// The shared composer field shell: fill + radius + border + a min height of
+  /// [_composerFieldHeight]. BOTH the text field and the hold-to-talk button
+  /// use it, so the two are always EXACTLY the same height regardless of font
+  /// scale (the field's own decorator contributes no padding — isCollapsed).
+  Widget _composerBox({required Widget child, BoxDecoration? decoration}) {
+    final colors = colorsOf(context);
+    return Container(
+      constraints: const BoxConstraints(minHeight: _composerFieldHeight),
+      alignment: Alignment.center,
+      decoration: decoration ??
+          BoxDecoration(
+            color: colors.muted,
+            borderRadius: AppRadius.rMd,
+            border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+          ),
+      child: child,
+    );
+  }
+
   /// Press-and-hold voice button (WeChat style): hold to record, release to
   /// send the clip as an attachment. Stays in voice mode afterwards.
   Widget _holdToTalkButton(BuildContext context) {
@@ -1074,12 +1467,10 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
       onLongPressStart: (_) => _startRecording(),
       onLongPressEnd: (_) => _stopRecording(),
       onLongPressCancel: _cancelRecording,
-      child: Container(
-        height: _composerFieldHeight,
-        alignment: Alignment.center,
+      child: _composerBox(
         decoration: BoxDecoration(
-          // Match the text field's fill + radius so switching voice/keyboard
-          // mode only swaps the content, not the shape.
+          // Same fill + radius as the text-field shell; only the tint/border
+          // change while recording.
           color: _recording
               ? colors.destructive.withValues(alpha: 0.12)
               : colors.muted,
@@ -1094,7 +1485,9 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
           _recording
               ? '${context.l10n.releaseToSend} · ${_formatDuration(_voiceElapsed)}'
               : context.l10n.holdToTalk,
-          style: text.meta.copyWith(
+          // Same style as the text field (see _composer) so the two are the
+          // same height and their baselines align.
+          style: text.body.copyWith(
             color: _recording ? colors.destructive : colors.mutedForeground,
             fontWeight: _recording ? FontWeight.w600 : FontWeight.normal,
           ),
@@ -1126,7 +1519,9 @@ class _SessionNamePill extends StatelessWidget {
       // Fixed pill length; long names get an ellipsis.
       constraints: const BoxConstraints(maxWidth: 160, minWidth: 96),
       child: Material(
-        color: colors.muted.withValues(alpha: 0.4),
+        // Tinted with the app accent (not a flat grey), so the centered pill
+        // reads as the chat's identity chip.
+        color: colors.primary.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
@@ -1143,7 +1538,7 @@ class _SessionNamePill extends StatelessWidget {
               textAlign: TextAlign.center,
               style: text.meta.copyWith(
                 fontWeight: FontWeight.w600,
-                color: colors.foreground,
+                color: colors.primary,
               ),
             ),
           ),
@@ -1173,16 +1568,12 @@ class _SessionInfoDialog extends StatelessWidget {
     final text = textOf(context);
     final s = session;
     final modelRef = s?.model ?? '';
-    final slash = modelRef.indexOf('/');
-    final provider = slash > 0 ? modelRef.substring(0, slash) : '';
-    final model = slash > 0 ? modelRef.substring(slash + 1) : modelRef;
     final locale = (s?.locale ?? '').isEmpty
         ? context.l10n.agentLocaleFollow
         : s!.locale!;
 
     final rows = <(String, String)>[
-      (context.l10n.providers, provider),
-      (context.l10n.modelLabel, model),
+      (context.l10n.modelLabel, modelRef),
       (context.l10n.presetLabel, s?.preset ?? ''),
       (context.l10n.agentLocale, locale),
     ].where((r) => r.$2.isNotEmpty).toList();
@@ -1269,5 +1660,26 @@ class _SessionInfoDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// A small corner badge for an attachment tile (upload spinner / retry /
+/// remove). Sits at the tile's top-right; [onTap] makes it actionable.
+class _TileBadge extends StatelessWidget {
+  final Widget child;
+  final Color? color;
+  final VoidCallback? onTap;
+  const _TileBadge({required this.child, this.color, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = color ?? Colors.black54;
+    final badge = Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: child,
+    );
+    if (onTap == null) return badge;
+    return GestureDetector(onTap: onTap, child: badge);
   }
 }

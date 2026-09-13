@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'api.dart';
+import 'widgets/dialogs.dart';
 import 'enums.dart';
 import 'i18n.dart';
 import 'app_layout.dart';
 import 'page_builder.dart';
 import 'prefs.dart';
+import 'services/local_store.dart';
 import 'store.dart';
 import 'theme/app_theme.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // media_kit (audio + video, all platforms) needs its native bindings
+  // initialized once before any Player is constructed.
+  MediaKit.ensureInitialized();
   runApp(const EasyLabApp());
 }
 
@@ -44,11 +51,24 @@ class _EasyLabAppState extends State<EasyLabApp> {
     await Prefs.loadAgentLocale();
     await Prefs.loadReadWatermarks();
     final prefs = await Prefs.load();
-    final base = prefs.baseUrl ?? '';
+    var base = prefs.baseUrl ?? '';
+    var token = prefs.token ?? '';
+    // Hosted-web defaults: a compile-time base URL (--dart-define) plus
+    // `?base=...&token=...` query params so a link can seed the connection
+    // (useful for the web build, harmless elsewhere).
+    const defaultBase = String.fromEnvironment('AGENT_BASE_URL');
+    if (base.isEmpty && defaultBase.isNotEmpty) base = defaultBase;
+    final qp = Uri.base.queryParameters;
+    if ((qp['base'] ?? '').isNotEmpty) base = qp['base']!;
+    if ((qp['token'] ?? '').isNotEmpty) token = qp['token']!;
+    if (base.isNotEmpty && token.isNotEmpty && base != (prefs.baseUrl ?? '')) {
+      // Persist so a refresh keeps the connection.
+      await Prefs.save(base, token);
+    }
     if (mounted) {
       setState(() {
         _baseUrl = base;
-        _token = prefs.token ?? '';
+        _token = token;
         _dark = prefs.darkMode;
       });
     }
@@ -174,7 +194,15 @@ class _EasyLabAppState extends State<EasyLabApp> {
 
   Future<AppStore> _buildStore() async {
     final api = await AgentBindApi.create(baseUrl: _baseUrl!, token: _token!);
-    if (mounted) _store = AppStore(api);
+    // Open the local mirror (Drift) and hydrate drafts + read watermarks from
+    // it before the first chat render, so startup is instant and offline-safe.
+    LocalStore? local;
+    try {
+      local = await LocalStore.open();
+    } catch (_) {
+      local = null;
+    }
+    if (mounted) _store = AppStore(api, local: local);
     return _store!;
   }
 }
@@ -309,15 +337,13 @@ class _SetupScreenState extends State<_SetupScreen> {
     final token = _token.text.trim();
     if (base.isEmpty || token.isEmpty) return;
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final api = await AgentBindApi.create(baseUrl: base, token: token);
       await api.listSessions();
       if (!mounted) return;
       await widget.onSave(base, token);
     } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(I18n.now.loadError('$e'))));
+      showErrorToast(context, I18n.now.loadError('$e'));
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -412,8 +438,7 @@ class _BackendsPageState extends State<_BackendsPage> {
     await Prefs.removeBackend(b.baseUrl);
     if (!mounted) return;
     setState(() => _backends.removeWhere((e) => e.baseUrl == b.baseUrl));
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.saved)));
+    showToast(context, context.l10n.saved);
   }
 
   @override

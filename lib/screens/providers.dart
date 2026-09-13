@@ -6,6 +6,16 @@ import '../navigation.dart';
 import '../services/models_dev.dart';
 import '../store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/dialogs.dart';
+
+/// The one special provider id + api type for the Vercel-AI-SDK-compatible
+/// gateway. The gateway is a SUPERSET: it carries text models
+/// (context_limit > 0) AND multimodal models (context_limit == 0) used by the
+/// tools. It is registered at most once.
+const String kGatewayApiType = 'vercel-compatible-gateway';
+const String kGatewayProviderId = 'gateway';
+
+bool isGatewayProvider(ProviderInfo p) => p.apiType == kGatewayApiType;
 
 /// Map a raw API type string to its localized display label.
 String apiTypeLabel(BuildContext context, String apiType) {
@@ -18,12 +28,32 @@ String apiTypeLabel(BuildContext context, String apiType) {
       return context.l10n.apiTypeAnthropic;
     case 'gemini':
       return context.l10n.apiTypeGemini;
+    case kGatewayApiType:
+      return context.l10n.apiTypeGateway;
     default:
       return apiType;
   }
 }
 
-/// Icon + color for a model capability (text/image/video/speech).
+/// Text-provider api types (a text provider carries ONLY text models).
+const List<String> kTextApiTypes = [
+  'openai-compatible',
+  'openai',
+  'anthropic',
+  'gemini',
+];
+
+/// Multimodal capabilities, used by the gateway model TEST (a gateway model
+/// does not store its capability — it is implied by the tool config knob).
+const List<String> kMultimodalCapabilities = [
+  'text',
+  'image',
+  'video',
+  'speech',
+  'transcription',
+];
+
+/// Icon + color for a capability (test selector / gateway rows).
 Widget capabilityIcon(
   BuildContext context,
   String capability, {
@@ -41,6 +71,12 @@ Widget capabilityIcon(
       );
     case 'speech':
       return Icon(Icons.graphic_eq_rounded, size: size, color: colors.primary);
+    case 'transcription':
+      return Icon(
+        Icons.record_voice_over_outlined,
+        size: size,
+        color: colors.accent,
+      );
     default:
       return Icon(
         Icons.chat_bubble_outline_rounded,
@@ -59,17 +95,17 @@ String capabilityLabel(BuildContext context, String capability) {
       return context.l10n.capVideo;
     case 'speech':
       return context.l10n.capSpeech;
+    case 'transcription':
+      return context.l10n.capTranscription;
     default:
       return context.l10n.capText;
   }
 }
 
-/// The full model capability set offered when adding a model.
-const List<String> kModelCapabilities = ['text', 'image', 'video', 'speech'];
-
 // ---------------------------------------------------------------------------
-// Providers list page — a plain LIST of providers; "+" in the app bar starts
-/// the add flow (provider form). Tapping a row edits that provider.
+// Providers list page — TWO sections:
+//   * Providers : text providers (multi-provider; text models only)
+//   * Gateway   : the single Vercel-compatible gateway (superset)
 // ---------------------------------------------------------------------------
 class ProvidersListScreen extends StatefulWidget {
   final AppStore store;
@@ -83,6 +119,7 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
   AppStore get store => widget.store;
   Map<String, ProviderInfo> _providers = {};
   bool _loading = true;
+  bool _providersLoading = false;
 
   @override
   void initState() {
@@ -99,15 +136,10 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
 
   void _onStore() {
     if (!mounted) return;
-    // The store is notified when a provider draft is completed/cancelled, so a
-    // return from the form page refreshes this list. Guard against overlapping
-    // reloads (store notifications are cheap but can arrive in bursts).
     setState(() {});
     if (_providersLoading) return;
     _reload();
   }
-
-  bool _providersLoading = false;
 
   Future<void> _reload() async {
     _providersLoading = true;
@@ -124,7 +156,7 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  void _add() {
+  void _addText() {
     store.beginProviderDraft(null);
     store.pushPage(const ProviderFormPage());
   }
@@ -134,12 +166,38 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
     store.pushPage(const ProviderFormPage());
   }
 
+  void _editGateway(ProviderInfo? g) {
+    store.beginProviderDraft(
+      g ??
+          ProviderInfo(
+            providerId: kGatewayProviderId,
+            apiType: kGatewayApiType,
+            baseUrl: '',
+            apiKey: '',
+            models: const [],
+          ),
+    );
+    store.pushPage(const GatewayFormPage());
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
-    final entries = _providers.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final all = _providers.values.toList();
+    final textProviders = all.where((p) => !isGatewayProvider(p)).toList()
+      ..sort((a, b) => a.providerId.compareTo(b.providerId));
+    final gateway = all.firstWhere(
+      isGatewayProvider,
+      orElse: () => ProviderInfo(
+        providerId: kGatewayProviderId,
+        apiType: kGatewayApiType,
+        baseUrl: '',
+        apiKey: '',
+        models: const [],
+      ),
+    );
+    final hasGateway = all.any(isGatewayProvider);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -151,7 +209,7 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
           IconButton(
             icon: Icon(Icons.add_rounded, color: colors.primary),
             tooltip: context.l10n.addProvider,
-            onPressed: _add,
+            onPressed: _addText,
           ),
         ],
       ),
@@ -159,7 +217,8 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
-                if (entries.isEmpty)
+                _sectionHeader(context, context.l10n.providersSection),
+                if (textProviders.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     child: Text(
@@ -167,36 +226,86 @@ class _ProvidersListScreenState extends State<ProvidersListScreen> {
                       style: text.meta.copyWith(color: colors.mutedForeground),
                     ),
                   ),
-                for (final e in entries)
-                  ListTile(
-                    leading: Icon(
-                      Icons.dns_outlined,
-                      size: 20,
-                      color: colors.primary,
-                    ),
-                    title: Text(
-                      e.key,
-                      style: text.meta.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      '${apiTypeLabel(context, e.value.apiType)} · '
-                      '${context.l10n.modelsCount('${e.value.models.length}')}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                for (final p in textProviders) _providerTile(context, p),
+                const Divider(height: AppSpacing.xl),
+                _sectionHeader(context, context.l10n.gatewaySection),
+                ListTile(
+                  leading: Icon(
+                    Icons.hub_outlined,
+                    size: 20,
+                    color: hasGateway ? colors.success : colors.mutedForeground,
+                  ),
+                  title: Text(
+                    kGatewayProviderId,
+                    style: text.meta.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    hasGateway
+                        ? '${context.l10n.modelsCount('${gateway.models.length}')} · ${gateway.baseUrl}'
+                        : context.l10n.gatewayHint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.micro.copyWith(color: colors.mutedForeground),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                  onTap: () => _editGateway(hasGateway ? gateway : null),
+                ),
+                if (hasGateway)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
+                    child: Text(
+                      context.l10n.gatewayHint,
                       style: text.micro.copyWith(color: colors.mutedForeground),
                     ),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
-                    onTap: () => _edit(e.value),
                   ),
               ],
             ),
     );
   }
+
+  Widget _sectionHeader(BuildContext context, String label) {
+    final text = textOf(context);
+    final colors = colorsOf(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
+      child: Text(
+        label,
+        style: text.micro.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
+          color: colors.mutedForeground,
+        ),
+      ),
+    );
+  }
+
+  Widget _providerTile(BuildContext context, ProviderInfo p) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    return ListTile(
+      leading: Icon(Icons.dns_outlined, size: 20, color: colors.primary),
+      title: Text(
+        p.providerId,
+        style: text.meta.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        '${apiTypeLabel(context, p.apiType)} · '
+        '${context.l10n.modelsCount('${p.models.length}')}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: text.micro.copyWith(color: colors.mutedForeground),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+      onTap: () => _edit(p),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Provider form page — the provider's connection fields plus a bottom model
-// section. "+" in the model section opens the model form page.
+// Text provider form — id / api type / base URL / key + text models (each
+// requires a context_limit). "+" opens the text-model form.
 // ---------------------------------------------------------------------------
 class ProviderFormScreen extends StatefulWidget {
   final AppStore store;
@@ -224,7 +333,9 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
       _id = TextEditingController(text: d.id);
       _url = TextEditingController(text: d.baseUrl);
       _key = TextEditingController(text: d.apiKey);
-      _apiType = d.apiType;
+      _apiType = d.apiType == kGatewayApiType
+          ? 'openai-compatible'
+          : d.apiType;
     }
     store.addListener(_onStore);
   }
@@ -259,7 +370,6 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
       d.id = picked.id;
       d.baseUrl = _url?.text ?? '';
       d.apiType = _apiType;
-      // Prefill every catalog model (capability-derived); the user prunes.
       d.models
         ..clear()
         ..addAll(
@@ -269,7 +379,6 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
                   id: m.id,
                   name: m.name,
                   contextLimit: m.contextLimit,
-                  capability: m.capability,
                 ),
               )
               .toList(),
@@ -285,19 +394,11 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
     d.baseUrl = _url?.text.trim() ?? d.baseUrl;
     d.apiKey = _key?.text ?? d.apiKey;
     if (d.id.isEmpty || d.baseUrl.isEmpty) return;
-    // Text models must carry a context length; generation models are fine at 0.
-    if (d.models.any(
-      (m) =>
-          (m.capability.isEmpty || m.capability == 'text') &&
-          (m.contextLimit ?? 0) <= 0,
-    )) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.contextLengthRequired)),
-      );
+    if (d.models.any((m) => (m.contextLimit ?? 0) <= 0)) {
+      showToast(context, context.l10n.contextLengthRequired);
       return;
     }
     setState(() => _registering = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await store.api.registerProvider(
         ProviderInfo(
@@ -309,11 +410,10 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
         ),
       );
       store.endProviderDraft();
-      messenger.showSnackBar(SnackBar(content: Text(context.l10n.saved)));
-      // Back to the providers list.
+      showToast(context, context.l10n.saved);
       store.popPage();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      showErrorToast(context, '$e');
     }
     if (mounted) setState(() => _registering = false);
   }
@@ -345,7 +445,6 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          // models.dev template prefill.
           InkWell(
             borderRadius: AppRadius.rSm,
             onTap: _pickTemplate,
@@ -375,26 +474,12 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
           DropdownButtonFormField<String>(
             initialValue: _apiType,
             items: [
-              DropdownMenuItem(
-                value: 'openai-compatible',
-                child: Text(context.l10n.apiTypeOpenaiCompat),
-              ),
-              DropdownMenuItem(
-                value: 'openai',
-                child: Text(context.l10n.apiTypeOpenai),
-              ),
-              DropdownMenuItem(
-                value: 'anthropic',
-                child: Text(context.l10n.apiTypeAnthropic),
-              ),
-              DropdownMenuItem(
-                value: 'gemini',
-                child: Text(context.l10n.apiTypeGemini),
-              ),
+              for (final t in kTextApiTypes)
+                DropdownMenuItem(value: t, child: Text(apiTypeLabel(context, t))),
             ],
             onChanged: (v) => setState(() {
-              _apiType = v!;
-              d.apiType = v;
+              _apiType = v ?? 'openai-compatible';
+              d.apiType = _apiType;
             }),
             decoration: InputDecoration(labelText: context.l10n.apiType),
           ),
@@ -415,8 +500,6 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
             decoration: InputDecoration(labelText: context.l10n.apiKeyReq),
           ),
           const SizedBox(height: AppSpacing.lg),
-
-          // ---- model section ----
           Row(
             children: [
               Expanded(
@@ -431,9 +514,7 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
               IconButton(
                 tooltip: context.l10n.addModel,
                 icon: Icon(Icons.add_rounded, size: 20, color: colors.primary),
-                onPressed: () {
-                  store.pushPage(ProviderModelsPage());
-                },
+                onPressed: () => store.pushPage(ProviderModelsPage()),
               ),
             ],
           ),
@@ -470,8 +551,267 @@ class _ProviderFormScreenState extends State<ProviderFormScreen> {
   }
 }
 
-/// A compact, tappable model row in the provider form. Tapping opens the
-/// model's own form page; the × removes it from the draft.
+// ---------------------------------------------------------------------------
+// Gateway form — the single Vercel-compatible gateway. base URL + key +
+// model list. A model's context_limit > 0 marks it as a text model; == 0 marks
+// it as a multimodal model (used by the tools).
+// ---------------------------------------------------------------------------
+class GatewayFormScreen extends StatefulWidget {
+  final AppStore store;
+  const GatewayFormScreen({super.key, required this.store});
+
+  @override
+  State<GatewayFormScreen> createState() => _GatewayFormScreenState();
+}
+
+class _GatewayFormScreenState extends State<GatewayFormScreen> {
+  AppStore get store => widget.store;
+  ProviderDraft? get draft => store.providerDraft;
+
+  TextEditingController? _url;
+  TextEditingController? _key;
+  bool _registering = false;
+  bool _discovering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = draft;
+    _url = TextEditingController(text: d?.baseUrl ?? '');
+    _key = TextEditingController(text: d?.apiKey ?? '');
+    store.addListener(_onStore);
+  }
+
+  @override
+  void dispose() {
+    store.removeListener(_onStore);
+    _url?.dispose();
+    _key?.dispose();
+    super.dispose();
+  }
+
+  void _onStore() {
+    if (mounted) setState(() {});
+  }
+
+  /// Ask the gateway's `/config` for its models and classify each by the
+  /// advertised kind (language → real context; everything else → multimodal).
+  /// This is how the user avoids typing model ids and guessing capabilities.
+  Future<void> _discover() async {
+    final d = draft;
+    if (d == null) return;
+    final url = _url?.text.trim() ?? '';
+    if (url.isEmpty) return;
+    setState(() => _discovering = true);
+    try {
+      final r = await store.api.discoverGatewayModels(
+        providerId: kGatewayProviderId,
+        apiType: kGatewayApiType,
+        baseUrl: url,
+        apiKey: _key?.text ?? '',
+      );
+      if (!mounted) return;
+      if (!r.error.isEmpty && r.models.isEmpty) {
+        showErrorToast(context, r.error);
+      } else {
+        setState(() {
+          d.models
+            ..clear()
+            ..addAll(r.models);
+        });
+        showToast(
+          context,
+          context.l10n.discoveredModels('${r.models.length}'),
+        );
+      }
+    } catch (e) {
+      showErrorToast(context, '$e');
+    }
+    if (mounted) setState(() => _discovering = false);
+  }
+
+  Future<void> _save() async {
+    final d = draft;
+    if (d == null) return;
+    d.id = kGatewayProviderId;
+    d.apiType = kGatewayApiType;
+    d.baseUrl = _url?.text.trim() ?? '';
+    d.apiKey = _key?.text ?? '';
+    if (d.baseUrl.isEmpty) return;
+    setState(() => _registering = true);
+    try {
+      await store.api.registerProvider(
+        ProviderInfo(
+          providerId: kGatewayProviderId,
+          apiType: kGatewayApiType,
+          baseUrl: d.baseUrl,
+          apiKey: d.apiKey,
+          models: d.models,
+        ),
+      );
+      store.endProviderDraft();
+      showToast(context, context.l10n.saved);
+      store.popPage();
+    } catch (e) {
+      showErrorToast(context, '$e');
+    }
+    if (mounted) setState(() => _registering = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    final d = draft;
+    if (d == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final canSave = (_url?.text.trim().isNotEmpty ?? false);
+    final textModels = d.models.where((m) => (m.contextLimit ?? 0) > 0).toList();
+    final multiModels =
+        d.models.where((m) => (m.contextLimit ?? 0) <= 0).toList();
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            store.endProviderDraft();
+            store.popPage();
+          },
+        ),
+        title: Text(context.l10n.gatewayTitle),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          Text(
+            context.l10n.gatewayHint,
+            style: text.micro.copyWith(color: colors.mutedForeground),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _url,
+            onChanged: (v) {
+              d.baseUrl = v;
+              setState(() {});
+            },
+            decoration: InputDecoration(labelText: context.l10n.baseUrlReq),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _key,
+            obscureText: true,
+            onChanged: (v) => d.apiKey = v,
+            decoration: InputDecoration(labelText: context.l10n.apiKeyReq),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Auto-detect the models + their kinds straight from the gateway, so
+          // the user doesn't hand-type ids or classify each one.
+          OutlinedButton.icon(
+            onPressed: (_url?.text.trim().isEmpty ?? true) || _discovering
+                ? null
+                : _discover,
+            icon: _discovering
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cloud_download_outlined, size: 16),
+            label: Text(
+              _discovering
+                  ? context.l10n.discoveringModels
+                  : context.l10n.discoverModels,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          // Text / vision models (context_limit > 0).
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.l10n.gatewayTextModels,
+                  style: text.meta.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: context.l10n.addModel,
+                icon: Icon(Icons.add_rounded, size: 20, color: colors.primary),
+                onPressed: () => store.pushPage(GatewayModelPage()),
+              ),
+            ],
+          ),
+          if (textModels.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                context.l10n.gatewayTextModelsHint,
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
+            ),
+          for (final m in textModels)
+            _ModelRow(
+              model: m,
+              onTap: () => store.pushPage(GatewayModelPage(modelId: m.id)),
+              onRemove: () => setState(() => d.models.remove(m)),
+            ),
+          const SizedBox(height: AppSpacing.lg),
+          // Multimodal models (image/video/speech/transcription).
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.l10n.gatewayMultimodalModels,
+                  style: text.meta.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: context.l10n.addModel,
+                icon: Icon(Icons.add_rounded, size: 20, color: colors.accent),
+                onPressed: () => store.pushPage(GatewayModelPage()),
+              ),
+            ],
+          ),
+          if (multiModels.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                context.l10n.gatewayModelsHint,
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
+            ),
+          for (final m in multiModels)
+            _ModelRow(
+              model: m,
+              onTap: () => store.pushPage(GatewayModelPage(modelId: m.id)),
+              onRemove: () => setState(() => d.models.remove(m)),
+            ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: FilledButton(
+            onPressed: canSave && !_registering ? _save : null,
+            child: Text(
+              _registering ? context.l10n.registering : context.l10n.save,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A compact, tappable model row. A gateway multimodal model shows its kind
+/// (image / video / speech / transcription / …) from `model.modelType`; a text
+/// model shows its context window. Tapping edits; the × removes it.
 class _ModelRow extends StatelessWidget {
   final ProviderModel model;
   final VoidCallback onTap;
@@ -482,11 +822,48 @@ class _ModelRow extends StatelessWidget {
     required this.onRemove,
   });
 
+  /// Localized label for a model kind tag.
+  String _typeLabel(BuildContext context, String type) {
+    switch (type) {
+      case 'text':
+      case '':
+        return context.l10n.capText;
+      case 'image':
+        return context.l10n.capImage;
+      case 'video':
+        return context.l10n.capVideo;
+      case 'speech':
+        return context.l10n.capSpeech;
+      case 'transcription':
+        return context.l10n.capTranscription;
+      case 'embedding':
+        return context.l10n.capEmbedding;
+      case 'reranking':
+        return context.l10n.capReranking;
+      case 'realtime':
+        return context.l10n.capRealtime;
+      default:
+        return type;
+    }
+  }
+
+  IconData _typeIcon(String type) => switch (type) {
+        'image' => Icons.image_outlined,
+        'video' => Icons.videocam_outlined,
+        'speech' => Icons.graphic_eq_rounded,
+        'transcription' => Icons.record_voice_over_outlined,
+        'embedding' => Icons.scatter_plot_outlined,
+        'reranking' => Icons.reorder_rounded,
+        'realtime' => Icons.bolt_rounded,
+        _ => Icons.chat_bubble_outline_rounded,
+      };
+
   @override
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
-    final isText = model.capability.isEmpty || model.capability == 'text';
+    final isText = (model.contextLimit ?? 0) > 0;
+    final type = isText ? 'text' : model.modelType;
     return Container(
       margin: const EdgeInsets.only(top: AppSpacing.xs),
       decoration: BoxDecoration(
@@ -506,7 +883,11 @@ class _ModelRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              capabilityIcon(context, model.capability),
+              Icon(
+                _typeIcon(type),
+                size: 14,
+                color: colors.mutedForeground,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
@@ -520,8 +901,8 @@ class _ModelRow extends StatelessWidget {
               ),
               Text(
                 isText
-                    ? '${capabilityLabel(context, model.capability)} · ${model.contextLimit ?? 0}'
-                    : capabilityLabel(context, model.capability),
+                    ? '${context.l10n.capText} · ${model.contextLimit ?? 0}'
+                    : _typeLabel(context, type),
                 style: text.micro.copyWith(color: colors.mutedForeground),
               ),
               IconButton(
@@ -539,14 +920,14 @@ class _ModelRow extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Model form page — a SINGLE model's form (its own capability, id, context and
-// test). Opened with `modelId == null` to add a new model, or with an existing
-// id to edit that model in place. Writes straight onto the provider draft.
+// TEXT-provider model form — a SINGLE text model (id, name, context). The
+// context is REQUIRED (it drives compaction). A vision model is still a text
+// model; the models.dev catalog can fill the fields. The gateway uses a
+// DIFFERENT form ([GatewayModelScreen]) because its models are classified by
+// context (text vs multimodal) rather than capability.
 // ---------------------------------------------------------------------------
 class ProviderModelScreen extends StatefulWidget {
   final AppStore store;
-
-  /// Null = adding a new model; otherwise the id of the model being edited.
   final String? modelId;
   const ProviderModelScreen({super.key, required this.store, this.modelId});
 
@@ -558,16 +939,9 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
   AppStore get store => widget.store;
 
   late final TextEditingController _modelIdCtrl;
+  late final TextEditingController _modelNameCtrl;
   late final TextEditingController _modelCtxCtrl;
-  late String _capability;
-  late String _name;
 
-  // Catalog picker (fills the id/name/context fields).
-  MdProvider? _template;
-  String _modelQuery = '';
-  String _catalogCapability = 'text';
-
-  // Per-model test state.
   bool _testing = false;
   bool? _testOk;
   String? _testMsg;
@@ -588,11 +962,10 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
     super.initState();
     final m = _existing();
     _modelIdCtrl = TextEditingController(text: m?.id ?? '');
+    _modelNameCtrl = TextEditingController(text: m?.name ?? '');
     _modelCtxCtrl = TextEditingController(
       text: (m?.contextLimit ?? 0) > 0 ? '${m!.contextLimit}' : '',
     );
-    _capability = (m?.capability.isNotEmpty ?? false) ? m!.capability : 'text';
-    _name = m?.name ?? '';
     store.addListener(_onStore);
   }
 
@@ -600,6 +973,7 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
   void dispose() {
     store.removeListener(_onStore);
     _modelIdCtrl.dispose();
+    _modelNameCtrl.dispose();
     _modelCtxCtrl.dispose();
     super.dispose();
   }
@@ -613,25 +987,19 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
     if (d == null) return;
     final mid = _modelIdCtrl.text.trim();
     if (mid.isEmpty) return;
-    final isText = _capability == 'text';
     final ctx = int.tryParse(_modelCtxCtrl.text.trim());
-    if (isText && (ctx == null || ctx <= 0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.contextLengthRequired)),
-      );
+    if (ctx == null || ctx <= 0) {
+      showToast(context, context.l10n.contextLengthRequired);
       return;
     }
-    // Editing: drop the old entry if the id changed (so a rename replaces).
-    if (_isEdit) {
-      d.models.removeWhere((m) => m.id == widget.modelId);
-    }
+    final name = _modelNameCtrl.text.trim();
+    if (_isEdit) d.models.removeWhere((m) => m.id == widget.modelId);
     d.models.removeWhere((m) => m.id == mid);
     d.models.add(
       ProviderModel(
         id: mid,
-        name: _name.isNotEmpty ? _name : mid,
-        contextLimit: isText ? ctx : null,
-        capability: _capability,
+        name: name.isNotEmpty ? name : mid,
+        contextLimit: ctx,
       ),
     );
     store.popPage();
@@ -651,8 +1019,9 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
       apiType: d.apiType,
       baseUrl: d.baseUrl,
       apiKey: d.apiKey,
+      providerId: d.id,
       model: '${d.id}/$mid',
-      capability: _capability,
+      capability: 'text',
     );
     if (!mounted) return;
     final ok = r['ok'] == true;
@@ -672,31 +1041,6 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
     store.popPage();
   }
 
-  Future<void> _pickTemplate() async {
-    final picked = await showModalBottomSheet<MdProvider>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const _TemplatePickerSheet(),
-    );
-    if (picked == null) return;
-    setState(() {
-      _template = picked;
-      _catalogCapability = 'text';
-    });
-  }
-
-  void _applyCatalog(MdModel m) {
-    setState(() {
-      _modelIdCtrl.text = m.id;
-      _name = m.name.isNotEmpty ? m.name : m.id;
-      _capability = m.capability;
-      if ((m.contextLimit ?? 0) > 0) {
-        _modelCtxCtrl.text = '${m.contextLimit}';
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
@@ -705,20 +1049,6 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
     if (d == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final isText = _capability == 'text';
-    final templateModels = _template?.models ?? <MdModel>[];
-    final filtered = templateModels
-        .where(
-          (m) =>
-              _catalogCapability == 'all' || m.capability == _catalogCapability,
-        )
-        .where(
-          (m) =>
-              _modelQuery.isEmpty ||
-              m.id.toLowerCase().contains(_modelQuery.toLowerCase()) ||
-              m.name.toLowerCase().contains(_modelQuery.toLowerCase()),
-        )
-        .toList();
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -741,79 +1071,54 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          // Capability selector (decides the model's generation modality).
-          Text(
-            context.l10n.modelLabel,
-            style: text.meta.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          SegmentedButton<String>(
-            segments: [
-              for (final c in kModelCapabilities)
-                ButtonSegment(
-                  value: c,
-                  label: Text(capabilityLabel(context, c)),
-                ),
-            ],
-            selected: {_capability},
-            onSelectionChanged: (s) => setState(() => _capability = s.first),
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: _modelIdCtrl,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(labelText: context.l10n.modelIdLabel),
           ),
-          if (isText) ...[
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _modelCtxCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: context.l10n.contextLengthLabel,
-              ),
-            ),
-          ],
           const SizedBox(height: AppSpacing.md),
-          // Test (text models only — generation models have no test path).
-          if (isText)
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _testing || _modelIdCtrl.text.trim().isEmpty
-                      ? null
-                      : _test,
-                  icon: _testing
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          _testOk == true
-                              ? Icons.check_circle_rounded
-                              : Icons.science_outlined,
-                          size: 16,
-                          color: _testOk == true ? colors.success : null,
-                        ),
-                  label: Text(
-                    _testing
-                        ? context.l10n.testing
-                        : (_testOk == true
-                              ? context.l10n.taskDone
-                              : context.l10n.test),
-                  ),
-                ),
-              ],
+          TextField(
+            controller: _modelNameCtrl,
+            decoration: InputDecoration(labelText: context.l10n.modelNameLabel),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _modelCtxCtrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: context.l10n.contextLengthLabel,
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _testing || _modelIdCtrl.text.trim().isEmpty
+                    ? null
+                    : _test,
+                icon: _testing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _testOk == true
+                            ? Icons.check_circle_rounded
+                            : Icons.science_outlined,
+                        size: 16,
+                        color: _testOk == true ? colors.success : null,
+                      ),
+                label: Text(
+                  _testing
+                      ? context.l10n.testing
+                      : (_testOk == true
+                            ? context.l10n.taskDone
+                            : context.l10n.test),
+                ),
+              ),
+            ],
+          ),
           if (_testMsg != null)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
@@ -824,69 +1129,6 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
                 ),
               ),
             ),
-
-          const Divider(height: AppSpacing.xl),
-          // Catalog browser (optional): pick a models.dev provider, filter by
-          // capability, tap a chip to fill the form.
-          OutlinedButton.icon(
-            onPressed: _pickTemplate,
-            icon: const Icon(Icons.auto_awesome_outlined, size: 16),
-            label: Text(
-              _template == null
-                  ? context.l10n.providerTemplateHint
-                  : _template!.name,
-            ),
-          ),
-          if (_template != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'text', label: Text('text')),
-                ButtonSegment(value: 'image', label: Text('image')),
-                ButtonSegment(value: 'video', label: Text('video')),
-                ButtonSegment(value: 'speech', label: Text('speech')),
-                ButtonSegment(value: 'all', label: Text('all')),
-              ],
-              selected: {_catalogCapability},
-              onSelectionChanged: (s) =>
-                  setState(() => _catalogCapability = s.first),
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            TextField(
-              decoration: InputDecoration(
-                hintText: context.l10n.searchModels,
-                prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                isDense: true,
-              ),
-              onChanged: (v) => setState(() => _modelQuery = v),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final m in filtered)
-                  ActionChip(
-                    label: Text(
-                      m.name.isNotEmpty ? m.name : m.id,
-                      style: text.micro,
-                    ),
-                    avatar: capabilityIcon(context, m.capability, size: 13),
-                    onPressed: () => _applyCatalog(m),
-                  ),
-                if (filtered.isEmpty)
-                  Text(
-                    context.l10n.noPackagesYet,
-                    style: text.micro.copyWith(color: colors.mutedForeground),
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -901,6 +1143,294 @@ class _ProviderModelScreenState extends State<ProviderModelScreen> {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// GATEWAY model form — the gateway is a SUPERSET: it serves text/vision models
+// (context_limit > 0) AND multimodal models (context_limit == 0 → image/video/
+// speech/transcription, used by the tools). The form mirrors that split: the
+// context field is optional and its emptiness decides the model kind. A "test
+// as" selector picks which probe to run. There is no models.dev catalog here.
+// ---------------------------------------------------------------------------
+class GatewayModelScreen extends StatefulWidget {
+  final AppStore store;
+  final String? modelId;
+  const GatewayModelScreen({super.key, required this.store, this.modelId});
+
+  @override
+  State<GatewayModelScreen> createState() => _GatewayModelScreenState();
+}
+
+class _GatewayModelScreenState extends State<GatewayModelScreen> {
+  AppStore get store => widget.store;
+
+  late final TextEditingController _modelIdCtrl;
+  late final TextEditingController _modelNameCtrl;
+  late final TextEditingController _modelCtxCtrl;
+  String _testCapability = 'text';
+
+  bool _testing = false;
+  bool? _testOk;
+  String? _testMsg;
+
+  bool get _isEdit => widget.modelId != null;
+
+  ProviderModel? _existing() {
+    final d = store.providerDraft;
+    if (d == null || widget.modelId == null) return null;
+    for (final m in d.models) {
+      if (m.id == widget.modelId) return m;
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final m = _existing();
+    _modelIdCtrl = TextEditingController(text: m?.id ?? '');
+    _modelNameCtrl = TextEditingController(text: m?.name ?? '');
+    _modelCtxCtrl = TextEditingController(
+      text: (m?.contextLimit ?? 0) > 0 ? '${m!.contextLimit}' : '',
+    );
+    // Pre-select the probe kind from the stored kind (discovered modelType),
+    // else from the context: a positive context is a text model, empty is
+    // multimodal (image/video/speech/transcription).
+    if (m != null) {
+      if ((m.contextLimit ?? 0) > 0) {
+        _testCapability = 'text';
+      } else if (kMultimodalCapabilities.contains(m.modelType)) {
+        _testCapability = m.modelType;
+      } else {
+        _testCapability = 'image';
+      }
+    }
+    store.addListener(_onStore);
+  }
+
+  @override
+  void dispose() {
+    store.removeListener(_onStore);
+    _modelIdCtrl.dispose();
+    _modelNameCtrl.dispose();
+    _modelCtxCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onStore() {
+    if (mounted) setState(() {});
+  }
+
+  void _save() {
+    final d = store.providerDraft;
+    if (d == null) return;
+    final mid = _modelIdCtrl.text.trim();
+    if (mid.isEmpty) return;
+    final ctx = int.tryParse(_modelCtxCtrl.text.trim());
+    final name = _modelNameCtrl.text.trim();
+    // The model kind is NOT invented here: it comes from discovery /config.
+    // Preserve the existing tag when editing; default new manual entries to
+    // '' (unknown) — a text model is implied by a positive context.
+    final prev = _existing();
+    final modelType = (prev?.modelType ?? '');
+    if (_isEdit) d.models.removeWhere((m) => m.id == widget.modelId);
+    d.models.removeWhere((m) => m.id == mid);
+    d.models.add(
+      ProviderModel(
+        id: mid,
+        name: name.isNotEmpty ? name : mid,
+        contextLimit: (ctx != null && ctx > 0) ? ctx : 0,
+        modelType: (ctx != null && ctx > 0) ? 'text' : modelType,
+      ),
+    );
+    store.popPage();
+  }
+
+  Future<void> _test() async {
+    final d = store.providerDraft;
+    if (d == null) return;
+    final mid = _modelIdCtrl.text.trim();
+    if (mid.isEmpty) return;
+    setState(() {
+      _testing = true;
+      _testOk = null;
+      _testMsg = null;
+    });
+    final r = await store.api.testProvider(
+      apiType: d.apiType,
+      baseUrl: d.baseUrl,
+      apiKey: d.apiKey,
+      providerId: d.id,
+      model: '${d.id}/$mid',
+      capability: _testCapability,
+    );
+    if (!mounted) return;
+    final ok = r['ok'] == true;
+    setState(() {
+      _testing = false;
+      _testOk = ok;
+      _testMsg = ok
+          ? context.l10n.testModelOk('${r['result'] ?? ''}')
+          : '${r['result'] ?? 'Failed'}';
+    });
+  }
+
+  void _remove() {
+    final d = store.providerDraft;
+    if (d == null) return;
+    d.models.removeWhere((m) => m.id == widget.modelId);
+    store.popPage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final text = textOf(context);
+    final d = store.providerDraft;
+    if (d == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final ctx = int.tryParse(_modelCtxCtrl.text.trim());
+    final isMultimodal = ctx == null || ctx <= 0;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => store.popPage(),
+        ),
+        title: Text(_isEdit ? context.l10n.modelLabel : context.l10n.addModel),
+        actions: [
+          if (_isEdit)
+            IconButton(
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                color: colors.destructive,
+              ),
+              tooltip: context.l10n.delete,
+              onPressed: _remove,
+            ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          TextField(
+            controller: _modelIdCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(labelText: context.l10n.modelIdLabel),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _modelNameCtrl,
+            decoration: InputDecoration(labelText: context.l10n.modelNameLabel),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _modelCtxCtrl,
+            keyboardType: TextInputType.number,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: context.l10n.contextLengthLabel,
+              helperText: context.l10n.contextOptional,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // A one-line readout of the inferred kind so the user sees the
+          // consequence of leaving the context empty.
+          Row(
+            children: [
+              Icon(
+                isMultimodal
+                    ? Icons.auto_awesome_outlined
+                    : Icons.chat_bubble_outline_rounded,
+                size: 14,
+                color: isMultimodal ? colors.accent : colors.success,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                isMultimodal
+                    ? context.l10n.multimodal
+                    : context.l10n.capText,
+                style: text.micro.copyWith(color: colors.mutedForeground),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Test — the probe kind is chosen HERE only (never stored): the
+          // stored context (not this selector) decides text vs multimodal.
+          Text(
+            context.l10n.testAs,
+            style: text.meta.copyWith(fontWeight: FontWeight.w600, fontSize: 12),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final c in kMultimodalCapabilities)
+                ChoiceChip(
+                  label: Text(capabilityLabel(context, c)),
+                  selected: _testCapability == c,
+                  onSelected: (_) => setState(() => _testCapability = c),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _testing || _modelIdCtrl.text.trim().isEmpty
+                    ? null
+                    : _test,
+                icon: _testing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _testOk == true
+                            ? Icons.check_circle_rounded
+                            : Icons.science_outlined,
+                        size: 16,
+                        color: _testOk == true ? colors.success : null,
+                      ),
+                label: Text(
+                  _testing
+                      ? context.l10n.testing
+                      : (_testOk == true
+                            ? context.l10n.taskDone
+                            : context.l10n.test),
+                ),
+              ),
+            ],
+          ),
+          if (_testMsg != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                _testMsg!,
+                style: text.micro.copyWith(
+                  color: _testOk == true ? colors.success : colors.destructive,
+                ),
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: FilledButton(
+            onPressed: _modelIdCtrl.text.trim().isEmpty ? null : _save,
+            child: Text(context.l10n.save),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 /// models.dev catalog picker (bottom sheet): search + list of providers.
 class _TemplatePickerSheet extends StatefulWidget {

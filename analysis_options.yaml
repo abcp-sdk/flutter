@@ -18,6 +18,9 @@ analyzer:
     - ios/**
     - windows/**
     - macos/**
+    # Vendored, byte-for-byte upstream plugin copies (see
+    # tool/regen-third-party.sh) — not held to this app's lint rules.
+    - third_party/**
 
 linter:
   # The lint rules applied to this project can be customized in the

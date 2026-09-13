@@ -6,12 +6,14 @@ import '../api.dart';
 import '../i18n.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'dialogs.dart';
 import 'media_attachment.dart';
 import 'tool_part.dart';
 
 /// A structured attachment (own `file` part from `/messages` or the send flow).
-/// Rendering is by media type (image / audio / video / pdf / text / other) via
-/// [MediaCard].
+/// Rendered as a full-size media card by type (image thumbnail / inline audio
+/// player with duration / video poster / pdf/text preview / download) via
+/// [MediaCard]. History keeps the rich card; the composer uses a small tag.
 class _FileAttachment extends StatelessWidget {
   final ChatPart part;
   final AgentBindApi api;
@@ -129,6 +131,10 @@ class MessageBubble extends StatelessWidget {
   final ChatMessage msg;
   final Future<void> Function(String messageId) onUndo;
   final void Function(String changeId)? onOpenChange;
+  /// Re-send this user message as-is (withdraw + resend). Null disables retry.
+  final void Function(String text)? onResend;
+  /// Withdraw + resend this user message with EDITED text. Null disables edit.
+  final void Function(String text)? onEditText;
   final AgentBindApi api;
   final String org;
   final String repo;
@@ -139,6 +145,8 @@ class MessageBubble extends StatelessWidget {
     required this.onUndo,
     required this.api,
     this.onOpenChange,
+    this.onResend,
+    this.onEditText,
     this.org = '',
     this.repo = '',
     this.branch = '',
@@ -155,8 +163,7 @@ class MessageBubble extends StatelessWidget {
         .map((p) => p.text)
         .join('\n');
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(context.l10n.copied), duration: const Duration(seconds: 1)));
+    showToast(context, context.l10n.copied);
   }
 
   Future<void> _actions(BuildContext context) async {
@@ -175,6 +182,19 @@ class MessageBubble extends StatelessWidget {
                 title: Text(ctx.l10n.copy),
                 onTap: () => Navigator.pop(ctx, 'copy'),
               ),
+            // Retry / edit only apply to the user's own messages.
+            if (msg.role == 'user' && onResend != null)
+              ListTile(
+                leading: const Icon(Icons.refresh_rounded),
+                title: Text(ctx.l10n.retry),
+                onTap: () => Navigator.pop(ctx, 'retry'),
+              ),
+            if (msg.role == 'user' && onEditText != null)
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: Text(ctx.l10n.edit),
+                onTap: () => Navigator.pop(ctx, 'edit'),
+              ),
             ListTile(
               leading: const Icon(Icons.undo_rounded),
               title: Text(ctx.l10n.undo),
@@ -188,9 +208,50 @@ class MessageBubble extends StatelessWidget {
     switch (action) {
       case 'copy':
         _copy(context);
+      case 'retry':
+        onResend?.call(_textOfMessage());
+      case 'edit':
+        final edited = await _editText(context);
+        if (edited != null) onEditText?.call(edited);
       case 'undo':
         onUndo(msg.id);
     }
+  }
+
+  /// Concatenated text of this message (used as the retry prompt / edit seed).
+  String _textOfMessage() => msg.parts
+      .where((p) => p.type == 'text')
+      .map((p) => p.text)
+      .join('\n');
+
+  /// Edit dialog: pre-fills the message text and returns the new text on save.
+  Future<String?> _editText(BuildContext context) async {
+    final ctrl = TextEditingController(text: _textOfMessage());
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.l10n.editMessage),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 8,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ctx.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text(ctx.l10n.apply),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return (edited == null || edited.isEmpty) ? null : edited;
   }
 
   @override
@@ -317,8 +378,15 @@ class MessageBubble extends StatelessWidget {
             _BubbleActions(
               isUser: isUser,
               showCopy: _hasText,
+              showResend: isUser && onResend != null,
+              showEdit: isUser && onEditText != null,
               createdAt: msg.createdAt,
               onCopy: () => _copy(context),
+              onResend: () => onResend?.call(_textOfMessage()),
+              onEdit: () async {
+                final edited = await _editText(context);
+                if (edited != null) onEditText?.call(edited);
+              },
               onUndo: () => _undo(context),
             ),
         ],
@@ -356,14 +424,22 @@ class MessageBubble extends StatelessWidget {
 class _BubbleActions extends StatelessWidget {
   final bool isUser;
   final bool showCopy;
+  final bool showResend;
+  final bool showEdit;
   final String createdAt;
   final VoidCallback onCopy;
+  final VoidCallback onResend;
+  final VoidCallback onEdit;
   final VoidCallback onUndo;
   const _BubbleActions({
     required this.isUser,
     required this.showCopy,
+    required this.showResend,
+    required this.showEdit,
     required this.createdAt,
     required this.onCopy,
+    required this.onResend,
+    required this.onEdit,
     required this.onUndo,
   });
 
@@ -381,13 +457,21 @@ class _BubbleActions extends StatelessWidget {
             _tinyIcon(Icons.copy_rounded, context.l10n.copy, onCopy, colors),
             const SizedBox(width: 2),
           ],
-          _tinyIcon(Icons.undo_rounded, context.l10n.undo, onUndo, colors),
-          if (isUser) ...[
-            const SizedBox(width: 4),
-            // Show the message's persisted timestamp instead of "you".
-            Text(_fmtTime(context, createdAt),
-                style: text.micro.copyWith(color: colors.mutedForeground)),
+          if (showResend) ...[
+            _tinyIcon(
+                Icons.refresh_rounded, context.l10n.retry, onResend, colors),
+            const SizedBox(width: 2),
           ],
+          if (showEdit) ...[
+            _tinyIcon(Icons.edit_rounded, context.l10n.edit, onEdit, colors),
+            const SizedBox(width: 2),
+          ],
+          _tinyIcon(Icons.undo_rounded, context.l10n.undo, onUndo, colors),
+          const SizedBox(width: 4),
+          // Every message shows its persisted timestamp (user AND assistant),
+          // so the conversation timeline is readable in both directions.
+          Text(_fmtTime(context, createdAt),
+              style: text.micro.copyWith(color: colors.mutedForeground)),
         ],
       ),
     );

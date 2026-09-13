@@ -8,14 +8,34 @@ import 'enums.dart';
 import 'models.dart';
 import 'navigation.dart';
 import 'prefs.dart';
+import 'services/local_store.dart';
 
 /// Mirrors stores.svelte.ts: app-wide state + repository/file-outlook caching.
 class AppStore extends ChangeNotifier {
-  AppStore(this.api) {
+  AppStore(this.api, {this.local}) {
+    _hydrateLocal();
     startSessionWatch();
   }
 
   final AgentBindApi api;
+
+  /// Persistent local mirror (Drift). Null when the platform/DB failed to
+  /// open — the store then behaves exactly as before (network-only).
+  final LocalStore? local;
+
+  /// Load cached drafts + read watermarks into memory so the first render is
+  /// instant; the session list/stream reconcile in the background.
+  Future<void> _hydrateLocal() async {
+    final l = local;
+    if (l == null) return;
+    try {
+      readSeqs = await l.loadReadSeqs();
+      chatDrafts
+        ..clear()
+        ..addAll(await l.loadDrafts());
+      notifyListeners();
+    } catch (_) {}
+  }
 
   SiderTab siderTab = SiderTab.chat;
   List<Session> sessions = [];
@@ -195,6 +215,9 @@ class AppStore extends ChangeNotifier {
   void markSessionRead(String id) {
     final seq = sessionById(id)?.messageSeq ?? readSeqs[id] ?? 0;
     Prefs.markRead(id, DateTime.now().toUtc().toIso8601String(), readSeq: seq);
+    // Mirror to the local DB so the watermark survives a cold start even if
+    // prefs are unavailable (web/desktop).
+    local?.setReadSeq(id, seq);
     sessions = sessions
         .map((s) => s.id == id ? s.copyWith(unreadCount: 0) : s)
         .toList();
@@ -218,6 +241,45 @@ class AppStore extends ChangeNotifier {
   /// Null when not editing. Model mutations happen here so navigating between
   /// the two form pages never loses the in-progress edit.
   ProviderDraft? providerDraft;
+
+  /// Per-session chat DRAFTS: the text and the (already-uploaded or in-flight)
+  /// attachments the user has composed but not yet sent. Kept on the store (not
+  /// the chat widget) so leaving the conversation — switching tab, opening the
+  /// session list, rotating, or the widget being disposed — and coming back
+  /// restores exactly what was typed/attached. Only a successful send (or an
+  /// explicit clear) removes the entry.
+  final Map<String, ChatDraft> chatDrafts = {};
+
+  ChatDraft draftFor(String sessionId) =>
+      chatDrafts.putIfAbsent(sessionId, ChatDraft.new);
+
+  void saveDraftText(String sessionId, String text) {
+    final d = draftFor(sessionId);
+    if (d.text == text) return;
+    d.text = text;
+    if (text.isEmpty && d.attachments.isEmpty) {
+      chatDrafts.remove(sessionId);
+      local?.saveDraft(sessionId, '', const []);
+      return;
+    }
+    local?.saveDraft(sessionId, d.text, d.attachments);
+  }
+
+  void saveDraftAttachments(String sessionId, List<UploadedFile> attachments) {
+    final d = draftFor(sessionId);
+    d.attachments = List.of(attachments);
+    if (d.text.isEmpty && d.attachments.isEmpty) {
+      chatDrafts.remove(sessionId);
+      local?.saveDraft(sessionId, '', const []);
+      return;
+    }
+    local?.saveDraft(sessionId, d.text, d.attachments);
+  }
+
+  void clearDraft(String sessionId) {
+    chatDrafts.remove(sessionId);
+    local?.saveDraft(sessionId, '', const []);
+  }
 
   void beginProviderDraft(ProviderInfo? existing) {
     providerDraft = existing == null

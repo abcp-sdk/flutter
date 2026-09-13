@@ -99,8 +99,7 @@ class _SessionListPageState extends State<SessionListPage> {
       _selected.clear();
     });
     if (failed.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.failed('${failed.length}'))));
+      showErrorToast(context, context.l10n.failed('${failed.length}'));
     }
   }
 
