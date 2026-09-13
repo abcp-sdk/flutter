@@ -479,19 +479,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'This clears the saved gateway URL and token and returns to the login screen.';
 
   @override
-  String get switchBackend => 'Switch backend';
+  String get switchBackend => 'Switch user';
 
   @override
-  String get backendsTitle => 'Backends';
+  String get backendsTitle => 'Users';
 
   @override
-  String get noSavedBackends => 'No saved backends yet.';
+  String get noSavedBackends => 'No saved users yet.';
 
   @override
-  String get addBackend => 'Add new backend';
+  String get addBackend => 'Add new user';
 
   @override
-  String get deleteBackend => 'Remove backend';
+  String get deleteBackend => 'Remove user';
 
   @override
   String get backendSection => 'Backend';

@@ -477,19 +477,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get logoutBody => '将清除已保存的网关地址与令牌，并返回登录页。';
 
   @override
-  String get switchBackend => '切换后端';
+  String get switchBackend => '切换用户';
 
   @override
-  String get backendsTitle => '后端';
+  String get backendsTitle => '用户';
 
   @override
-  String get noSavedBackends => '暂无已保存的后端。';
+  String get noSavedBackends => '暂无已保存的用户。';
 
   @override
-  String get addBackend => '添加新后端';
+  String get addBackend => '添加新用户';
 
   @override
-  String get deleteBackend => '移除后端';
+  String get deleteBackend => '移除用户';
 
   @override
   String get backendSection => '后端';

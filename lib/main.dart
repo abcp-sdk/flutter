@@ -39,12 +39,14 @@ class _EasyLabAppState extends State<EasyLabApp> {
   void initState() {
     super.initState();
     onAuthExpired = _logout;
+    onAddUser = _logout;
     _load();
   }
 
   @override
   void dispose() {
     onAuthExpired = null;
+    onAddUser = null;
     super.dispose();
   }
 

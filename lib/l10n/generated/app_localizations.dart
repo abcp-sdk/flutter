@@ -983,31 +983,31 @@ abstract class AppLocalizations {
   /// No description provided for @switchBackend.
   ///
   /// In zh, this message translates to:
-  /// **'切换后端'**
+  /// **'切换用户'**
   String get switchBackend;
 
   /// No description provided for @backendsTitle.
   ///
   /// In zh, this message translates to:
-  /// **'后端'**
+  /// **'用户'**
   String get backendsTitle;
 
   /// No description provided for @noSavedBackends.
   ///
   /// In zh, this message translates to:
-  /// **'暂无已保存的后端。'**
+  /// **'暂无已保存的用户。'**
   String get noSavedBackends;
 
   /// No description provided for @addBackend.
   ///
   /// In zh, this message translates to:
-  /// **'添加新后端'**
+  /// **'添加新用户'**
   String get addBackend;
 
   /// No description provided for @deleteBackend.
   ///
   /// In zh, this message translates to:
-  /// **'移除后端'**
+  /// **'移除用户'**
   String get deleteBackend;
 
   /// No description provided for @backendSection.

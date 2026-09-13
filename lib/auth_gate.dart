@@ -18,6 +18,11 @@ final GlobalKey<NavigatorState> rootNavKey = GlobalKey<NavigatorState>();
 /// rebuilds to the setup screen). Registered by the app root state.
 void Function()? onAuthExpired;
 
+/// Invoked by "add new user" entries (backend/user managers): clears the
+/// active connection and lands on the setup screen to sign in as a new user
+/// (base URL + token). Same mechanism as [onAuthExpired], different intent.
+void Function()? onAddUser;
+
 bool _dialogOpen = false;
 
 /// Show the auth-expired dialog (at most one at a time).

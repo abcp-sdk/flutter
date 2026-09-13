@@ -1333,9 +1333,7 @@ class _BackendsDetailState extends State<_BackendsDetail> {
         ListTile(
           leading: const Icon(Icons.add_rounded),
           title: Text(context.l10n.addBackend),
-          onTap: () {
-            showToast(context, context.l10n.addBackend);
-          },
+          onTap: () => onAddUser?.call(),
         ),
       ],
     );
