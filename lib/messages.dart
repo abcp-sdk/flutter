@@ -76,6 +76,14 @@ class MessagesController extends ChangeNotifier {
 
   int _allocSeq() => _nextSeq++;
 
+  /// Only the LOCAL bubbles still in flight (an optimistic user message or a
+  /// live streaming assistant bubble). Every merge/replace path keeps exactly
+  /// these — a COMPLETED local bubble is superseded by the server copy, so
+  /// keeping it would duplicate the message.
+  List<ChatMessage> _inFlightLocal() => messages
+      .where((m) => m.isLocal && (m.status == 'streaming' || m.status == 'pending'))
+      .toList();
+
   void _bumpSeqAfter(List<ChatMessage> history) {
     var maxSeq = -1;
     for (final m in history) {
@@ -114,9 +122,7 @@ class MessagesController extends ChangeNotifier {
       _syncedOldestId =
           cached.isEmpty ? '' : await l.oldestCachedId(sid);
       if (cached.isNotEmpty) {
-        final localOwned =
-            messages.where((m) => m.isLocal).toList();
-        messages = [...cached, ...localOwned];
+        messages = [...cached, ..._inFlightLocal()];
         _renumber();
         notifyListeners();
       }
@@ -169,8 +175,7 @@ class MessagesController extends ChangeNotifier {
     try {
       final (msgs, more) = await api.messages(sid, limit: 50);
       final chat = mapMessagesToChat(msgs);
-      final localOwned = messages.where((m) => m.isLocal).toList();
-      messages = [...localOwned, ...chat];
+      messages = [..._inFlightLocal(), ...chat];
       _renumber();
       hasMore = more;
       final l = local;
@@ -248,10 +253,10 @@ class MessagesController extends ChangeNotifier {
           ...messages,
         ];
       } else {
-        // Re-fetch the newest page, replacing non-local server messages but
-        // preserving in-flight local bubbles.
-        final localOwned = messages.where((m) => m.isLocal).toList();
-        messages = [...localOwned, ...chat];
+        // Re-fetch the newest page, replacing server messages but preserving
+        // ONLY in-flight local bubbles (a completed local bubble is superseded
+        // by the server copy and must not duplicate it).
+        messages = [..._inFlightLocal(), ...chat];
       }
       _renumber();
       hasMore = more;
@@ -496,6 +501,15 @@ class MessagesController extends ChangeNotifier {
         break;
       case 'turn-complete':
         _finishStreaming();
+        break;
+      case 'chain-changed':
+        // Another device withdrew/edited the chain (undo / retry). Drop any
+        // local streaming bubble and re-fetch the authoritative chain so this
+        // view converges (cross-device revert sync).
+        _clearStreaming();
+        sending = false;
+        notifyListeners();
+        unawaited(_fetchMessages());
         break;
       case 'status':
         final stype = params['type'];
