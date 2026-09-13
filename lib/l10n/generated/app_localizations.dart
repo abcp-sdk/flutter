@@ -2179,6 +2179,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'添加图像/视频/语音/转写模型（无上下文长度）。'**
   String get gatewayMultimodalModelsHint;
+
+  /// No description provided for @authExpiredTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'认证失败'**
+  String get authExpiredTitle;
+
+  /// No description provided for @authExpiredBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器拒绝了请求：令牌缺失、无效或已被吊销。请在连接设置中更新令牌后重试。'**
+  String get authExpiredBody;
+
+  /// No description provided for @signInAgain.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新登录'**
+  String get signInAgain;
 }
 
 class _AppLocalizationsDelegate

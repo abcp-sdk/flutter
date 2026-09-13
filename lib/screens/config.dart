@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../auth_gate.dart';
 import '../i18n.dart';
 import '../models.dart';
 import '../navigation.dart';
@@ -359,12 +360,16 @@ class _PresetsDetailState extends State<_PresetsDetail> {
       _presets = await widget.api.presets(
         locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
       );
-    } catch (_) {}
+    } catch (e) {
+      if (isAuthError(e)) showAuthExpiredDialog();
+    }
     try {
       _tools = await widget.api.tools(
         locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
       );
-    } catch (_) {}
+    } catch (e) {
+      if (isAuthError(e)) showAuthExpiredDialog();
+    }
     setState(() => _loading = false);
   }
 

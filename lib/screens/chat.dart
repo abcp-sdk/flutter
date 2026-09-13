@@ -22,6 +22,8 @@ import '../i18n.dart';
 import '../enums.dart';
 import '../navigation.dart';
 import '../messages.dart';
+import '../api.dart' show isAuthError;
+import '../auth_gate.dart';
 import '../models.dart';
 import '../prefs.dart';
 import '../store.dart';
@@ -237,12 +239,16 @@ class _ChatSessionPageState extends State<ChatSessionPageWidget> {
     // only fetches a provider's models when it is selected.
     try {
       _providers = await widget.store.api.providers();
-    } catch (_) {}
+    } catch (e) {
+      if (isAuthError(e)) showAuthExpiredDialog();
+    }
     try {
       _presets = await widget.store.api.presets(
         locale: Prefs.effectiveAgentLocale(uiZh: I18n.isZh),
       );
-    } catch (_) {}
+    } catch (e) {
+      if (isAuthError(e)) showAuthExpiredDialog();
+    }
     if (mounted) setState(() {});
     // Do NOT hijack store.codeOrg/codeRepo here: the Code tab is an
     // independent workspace the user browses by itself. The active session's

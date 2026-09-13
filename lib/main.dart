@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'api.dart';
+import 'auth_gate.dart';
 import 'widgets/dialogs.dart';
 import 'enums.dart';
 import 'i18n.dart';
@@ -34,15 +35,17 @@ class _EasyLabAppState extends State<EasyLabApp> {
   bool _dark = true;
   AppStore? _store;
 
-  /// Root navigator key: lets root-level helpers (backend manager) show
-  /// sheets with a context BELOW MaterialApp — the State's own context is
-  /// above it and has no Navigator, which made the button do nothing.
-  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
-
   @override
   void initState() {
     super.initState();
+    onAuthExpired = _logout;
     _load();
+  }
+
+  @override
+  void dispose() {
+    onAuthExpired = null;
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -107,7 +110,7 @@ class _EasyLabAppState extends State<EasyLabApp> {
   /// marked. Kept as a route (not a bottom sheet) so it feels like a page.
   Future<void> _manageBackends() async {
     final backends = await Prefs.backends();
-    final navCtx = _navKey.currentContext;
+    final navCtx = rootNavKey.currentContext;
     if (navCtx == null || !navCtx.mounted) return;
     await Navigator.of(navCtx).push(
       MaterialPageRoute<void>(
@@ -130,7 +133,7 @@ class _EasyLabAppState extends State<EasyLabApp> {
     return ValueListenableBuilder<Locale>(
         valueListenable: I18n.notifier,
         builder: (context, locale, _) => MaterialApp(
-          navigatorKey: _navKey,
+          navigatorKey: rootNavKey,
           title: I18n.now.appTitle,
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(Brightness.light),

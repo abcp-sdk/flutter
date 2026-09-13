@@ -661,5 +661,8 @@
   "gatewayTextModels": "Text / vision models",
   "gatewayTextModelsHint": "Add a language model (needs a context length).",
   "gatewayMultimodalModels": "Multimodal models",
-  "gatewayMultimodalModelsHint": "Add image/video/speech/transcription models (no context length)."
+  "gatewayMultimodalModelsHint": "Add image/video/speech/transcription models (no context length).",
+  "authExpiredTitle": "Sign-in required",
+  "authExpiredBody": "The server rejected the request: the token is missing, invalid, or revoked. Update the connection token and try again.",
+  "signInAgain": "Sign in again"
 }

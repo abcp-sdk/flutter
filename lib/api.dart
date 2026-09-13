@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:agent_client_sdk/agent_client_sdk.dart' as sdk;
 import 'package:connectrpc/protobuf.dart';
 import 'package:connectrpc/protocol/connect.dart' as protocol;
+import 'package:connectrpc/connect.dart' as connect;
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:protobuf/well_known_types/google/protobuf/struct.pb.dart' as wkt;
 
@@ -14,6 +15,15 @@ import 'models.dart';
 import 'services/local_bytes_io.dart'
     if (dart.library.js_interop) 'services/local_bytes_web.dart' as localbytes;
 import 'transport.dart';
+
+/// An auth rejection from the agent: missing / invalid / revoked bearer token
+/// (unauthenticated), or a tenant token reaching an admin-only surface
+/// (permission denied). Data loaders use this to surface the failure instead
+/// of silently rendering empty lists.
+bool isAuthError(Object e) =>
+    e is connect.ConnectException &&
+    (e.code == connect.Code.unauthenticated ||
+        e.code == connect.Code.permissionDenied);
 
 /// Parsed watch/prompt stream event.
 class StreamEvent {

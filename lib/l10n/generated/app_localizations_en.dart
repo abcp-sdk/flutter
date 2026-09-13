@@ -1147,4 +1147,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get gatewayMultimodalModelsHint =>
       'Add image/video/speech/transcription models (no context length).';
+
+  @override
+  String get authExpiredTitle => 'Sign-in required';
+
+  @override
+  String get authExpiredBody =>
+      'The server rejected the request: the token is missing, invalid, or revoked. Update the connection token and try again.';
+
+  @override
+  String get signInAgain => 'Sign in again';
 }

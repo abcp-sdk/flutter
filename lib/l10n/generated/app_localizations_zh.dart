@@ -1136,4 +1136,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get gatewayMultimodalModelsHint => '添加图像/视频/语音/转写模型（无上下文长度）。';
+
+  @override
+  String get authExpiredTitle => '认证失败';
+
+  @override
+  String get authExpiredBody => '服务器拒绝了请求：令牌缺失、无效或已被吊销。请在连接设置中更新令牌后重试。';
+
+  @override
+  String get signInAgain => '重新登录';
 }
