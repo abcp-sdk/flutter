@@ -557,6 +557,7 @@ Session sessionFromPb(sdk.Session s) => Session(
       lastMessageAt: s.lastMessageAt,
       lastMessagePreview: s.lastMessagePreview,
       messageSeq: s.messageSeq,
+      group: s.group,
     );
 
 Session _sessionFromSessionResults(sdk.Session? s) =>

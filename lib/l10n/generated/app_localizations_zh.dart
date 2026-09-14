@@ -1157,4 +1157,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get defaultPreset => '默认预设';
+
+  @override
+  String get sessionGroupLabel => '分组';
+
+  @override
+  String get subsessionBadge => '子会话';
 }

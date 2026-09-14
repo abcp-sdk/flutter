@@ -162,6 +162,16 @@ class $LocalSessionsTable extends LocalSessions
         requiredDuringInsert: false,
         defaultValue: const Constant(''),
       );
+  static const VerificationMeta _groupMeta = const VerificationMeta('group');
+  @override
+  late final GeneratedColumn<String> group = GeneratedColumn<String>(
+    'group',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -202,6 +212,7 @@ class $LocalSessionsTable extends LocalSessions
     messageSeq,
     lastMessageAt,
     lastMessagePreview,
+    group,
     updatedAt,
     lastSyncedAt,
   ];
@@ -312,6 +323,12 @@ class $LocalSessionsTable extends LocalSessions
         ),
       );
     }
+    if (data.containsKey('group')) {
+      context.handle(
+        _groupMeta,
+        group.isAcceptableOrUnknown(data['group']!, _groupMeta),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -392,6 +409,10 @@ class $LocalSessionsTable extends LocalSessions
         DriftSqlType.string,
         data['${effectivePrefix}last_message_preview'],
       )!,
+      group: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}updated_at'],
@@ -424,6 +445,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
   final int messageSeq;
   final String lastMessageAt;
   final String lastMessagePreview;
+  final String group;
   final String updatedAt;
   final int lastSyncedAt;
   const LocalSession({
@@ -441,6 +463,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
     required this.messageSeq,
     required this.lastMessageAt,
     required this.lastMessagePreview,
+    required this.group,
     required this.updatedAt,
     required this.lastSyncedAt,
   });
@@ -461,6 +484,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
     map['message_seq'] = Variable<int>(messageSeq);
     map['last_message_at'] = Variable<String>(lastMessageAt);
     map['last_message_preview'] = Variable<String>(lastMessagePreview);
+    map['group'] = Variable<String>(group);
     map['updated_at'] = Variable<String>(updatedAt);
     map['last_synced_at'] = Variable<int>(lastSyncedAt);
     return map;
@@ -482,6 +506,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
       messageSeq: Value(messageSeq),
       lastMessageAt: Value(lastMessageAt),
       lastMessagePreview: Value(lastMessagePreview),
+      group: Value(group),
       updatedAt: Value(updatedAt),
       lastSyncedAt: Value(lastSyncedAt),
     );
@@ -509,6 +534,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
       lastMessagePreview: serializer.fromJson<String>(
         json['lastMessagePreview'],
       ),
+      group: serializer.fromJson<String>(json['group']),
       updatedAt: serializer.fromJson<String>(json['updatedAt']),
       lastSyncedAt: serializer.fromJson<int>(json['lastSyncedAt']),
     );
@@ -531,6 +557,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
       'messageSeq': serializer.toJson<int>(messageSeq),
       'lastMessageAt': serializer.toJson<String>(lastMessageAt),
       'lastMessagePreview': serializer.toJson<String>(lastMessagePreview),
+      'group': serializer.toJson<String>(group),
       'updatedAt': serializer.toJson<String>(updatedAt),
       'lastSyncedAt': serializer.toJson<int>(lastSyncedAt),
     };
@@ -551,6 +578,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
     int? messageSeq,
     String? lastMessageAt,
     String? lastMessagePreview,
+    String? group,
     String? updatedAt,
     int? lastSyncedAt,
   }) => LocalSession(
@@ -568,6 +596,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
     messageSeq: messageSeq ?? this.messageSeq,
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
     lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+    group: group ?? this.group,
     updatedAt: updatedAt ?? this.updatedAt,
     lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
   );
@@ -597,6 +626,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
       lastMessagePreview: data.lastMessagePreview.present
           ? data.lastMessagePreview.value
           : this.lastMessagePreview,
+      group: data.group.present ? data.group.value : this.group,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       lastSyncedAt: data.lastSyncedAt.present
           ? data.lastSyncedAt.value
@@ -621,6 +651,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
           ..write('messageSeq: $messageSeq, ')
           ..write('lastMessageAt: $lastMessageAt, ')
           ..write('lastMessagePreview: $lastMessagePreview, ')
+          ..write('group: $group, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastSyncedAt: $lastSyncedAt')
           ..write(')'))
@@ -643,6 +674,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
     messageSeq,
     lastMessageAt,
     lastMessagePreview,
+    group,
     updatedAt,
     lastSyncedAt,
   );
@@ -664,6 +696,7 @@ class LocalSession extends DataClass implements Insertable<LocalSession> {
           other.messageSeq == this.messageSeq &&
           other.lastMessageAt == this.lastMessageAt &&
           other.lastMessagePreview == this.lastMessagePreview &&
+          other.group == this.group &&
           other.updatedAt == this.updatedAt &&
           other.lastSyncedAt == this.lastSyncedAt);
 }
@@ -683,6 +716,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
   final Value<int> messageSeq;
   final Value<String> lastMessageAt;
   final Value<String> lastMessagePreview;
+  final Value<String> group;
   final Value<String> updatedAt;
   final Value<int> lastSyncedAt;
   final Value<int> rowid;
@@ -701,6 +735,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
     this.messageSeq = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
     this.lastMessagePreview = const Value.absent(),
+    this.group = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -720,6 +755,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
     this.messageSeq = const Value.absent(),
     this.lastMessageAt = const Value.absent(),
     this.lastMessagePreview = const Value.absent(),
+    this.group = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -739,6 +775,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
     Expression<int>? messageSeq,
     Expression<String>? lastMessageAt,
     Expression<String>? lastMessagePreview,
+    Expression<String>? group,
     Expression<String>? updatedAt,
     Expression<int>? lastSyncedAt,
     Expression<int>? rowid,
@@ -759,6 +796,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
       if (lastMessageAt != null) 'last_message_at': lastMessageAt,
       if (lastMessagePreview != null)
         'last_message_preview': lastMessagePreview,
+      if (group != null) 'group': group,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
       if (rowid != null) 'rowid': rowid,
@@ -780,6 +818,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
     Value<int>? messageSeq,
     Value<String>? lastMessageAt,
     Value<String>? lastMessagePreview,
+    Value<String>? group,
     Value<String>? updatedAt,
     Value<int>? lastSyncedAt,
     Value<int>? rowid,
@@ -799,6 +838,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
       messageSeq: messageSeq ?? this.messageSeq,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+      group: group ?? this.group,
       updatedAt: updatedAt ?? this.updatedAt,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
       rowid: rowid ?? this.rowid,
@@ -850,6 +890,9 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
     if (lastMessagePreview.present) {
       map['last_message_preview'] = Variable<String>(lastMessagePreview.value);
     }
+    if (group.present) {
+      map['group'] = Variable<String>(group.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<String>(updatedAt.value);
     }
@@ -879,6 +922,7 @@ class LocalSessionsCompanion extends UpdateCompanion<LocalSession> {
           ..write('messageSeq: $messageSeq, ')
           ..write('lastMessageAt: $lastMessageAt, ')
           ..write('lastMessagePreview: $lastMessagePreview, ')
+          ..write('group: $group, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastSyncedAt: $lastSyncedAt, ')
           ..write('rowid: $rowid')
@@ -2222,6 +2266,7 @@ typedef $$LocalSessionsTableCreateCompanionBuilder =
       Value<int> messageSeq,
       Value<String> lastMessageAt,
       Value<String> lastMessagePreview,
+      Value<String> group,
       Value<String> updatedAt,
       Value<int> lastSyncedAt,
       Value<int> rowid,
@@ -2242,6 +2287,7 @@ typedef $$LocalSessionsTableUpdateCompanionBuilder =
       Value<int> messageSeq,
       Value<String> lastMessageAt,
       Value<String> lastMessagePreview,
+      Value<String> group,
       Value<String> updatedAt,
       Value<int> lastSyncedAt,
       Value<int> rowid,
@@ -2350,6 +2396,11 @@ class $$LocalSessionsTableFilterComposer
 
   ColumnFilters<String> get lastMessagePreview => $composableBuilder(
     column: $table.lastMessagePreview,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get group => $composableBuilder(
+    column: $table.group,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2468,6 +2519,11 @@ class $$LocalSessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get group => $composableBuilder(
+    column: $table.group,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -2539,6 +2595,9 @@ class $$LocalSessionsTableAnnotationComposer
     column: $table.lastMessagePreview,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get group =>
+      $composableBuilder(column: $table.group, builder: (column) => column);
 
   GeneratedColumn<String> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -2616,6 +2675,7 @@ class $$LocalSessionsTableTableManager
                 Value<int> messageSeq = const Value.absent(),
                 Value<String> lastMessageAt = const Value.absent(),
                 Value<String> lastMessagePreview = const Value.absent(),
+                Value<String> group = const Value.absent(),
                 Value<String> updatedAt = const Value.absent(),
                 Value<int> lastSyncedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2634,6 +2694,7 @@ class $$LocalSessionsTableTableManager
                 messageSeq: messageSeq,
                 lastMessageAt: lastMessageAt,
                 lastMessagePreview: lastMessagePreview,
+                group: group,
                 updatedAt: updatedAt,
                 lastSyncedAt: lastSyncedAt,
                 rowid: rowid,
@@ -2654,6 +2715,7 @@ class $$LocalSessionsTableTableManager
                 Value<int> messageSeq = const Value.absent(),
                 Value<String> lastMessageAt = const Value.absent(),
                 Value<String> lastMessagePreview = const Value.absent(),
+                Value<String> group = const Value.absent(),
                 Value<String> updatedAt = const Value.absent(),
                 Value<int> lastSyncedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2672,6 +2734,7 @@ class $$LocalSessionsTableTableManager
                 messageSeq: messageSeq,
                 lastMessageAt: lastMessageAt,
                 lastMessagePreview: lastMessagePreview,
+                group: group,
                 updatedAt: updatedAt,
                 lastSyncedAt: lastSyncedAt,
                 rowid: rowid,

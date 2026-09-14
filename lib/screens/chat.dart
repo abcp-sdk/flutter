@@ -1593,6 +1593,7 @@ class _SessionInfoDialog extends StatelessWidget {
     final locale = (s?.locale ?? '').isEmpty
         ? context.l10n.agentLocaleFollow
         : s!.locale!;
+    final group = (s?.group ?? '').isEmpty ? none : s!.group;
 
     // EVERY row is shown, with a placeholder when unset (no silent omission).
     final rows = <(String, String)>[
@@ -1600,6 +1601,8 @@ class _SessionInfoDialog extends StatelessWidget {
       (context.l10n.variantLabel, variant),
       (context.l10n.presetLabel, preset),
       (context.l10n.agentLocale, locale),
+      // Generic grouping key (a subsession shows its parent session here).
+      (context.l10n.sessionGroupLabel, group),
     ];
 
     return AlertDialog(

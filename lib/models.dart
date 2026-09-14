@@ -52,6 +52,10 @@ class Session {
   /// the unread count from `messageSeq - readSeq` (read state is local).
   final int messageSeq;
 
+  /// Generic grouping key (empty = ungrouped). A subsession carries its
+  /// parent session's name here.
+  final String group;
+
   Session({
     required this.id,
     this.org = '',
@@ -75,6 +79,7 @@ class Session {
     this.lastMessageAt = '',
     this.lastMessagePreview = '',
     this.messageSeq = 0,
+    this.group = '',
   });
 
   factory Session.fromJson(Map<String, dynamic> j) => Session(
@@ -100,6 +105,7 @@ class Session {
     lastMessageAt: j['last_message_at'] as String? ?? '',
     lastMessagePreview: j['last_message_preview'] as String? ?? '',
     messageSeq: j['message_seq'] as int? ?? 0,
+    group: j['group'] as String? ?? '',
   );
 
   String get sessionName => org.isNotEmpty ? '$org:$repo:$branch' : id;
@@ -114,6 +120,7 @@ class Session {
     int? messageSeq,
     String? lastMessageAt,
     String? lastMessagePreview,
+    String? group,
   }) => Session(
     id: id,
     org: org,
@@ -136,6 +143,7 @@ class Session {
     lastMessageAt: lastMessageAt ?? this.lastMessageAt,
     lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
     messageSeq: messageSeq ?? this.messageSeq,
+    group: group ?? this.group,
   );
 }
 

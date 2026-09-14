@@ -661,5 +661,7 @@
   "defaults": "默认项",
   "defaultsHint": "新建会话时自动使用（留空则用内置 default）",
   "defaultModel": "默认模型",
-  "defaultPreset": "默认预设"
+  "defaultPreset": "默认预设",
+  "sessionGroupLabel": "分组",
+  "subsessionBadge": "子会话"
 }

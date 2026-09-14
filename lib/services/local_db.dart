@@ -22,6 +22,7 @@ class LocalSessions extends Table {
   IntColumn get messageSeq => integer().withDefault(const Constant(0))();
   TextColumn get lastMessageAt => text().withDefault(const Constant(''))();
   TextColumn get lastMessagePreview => text().withDefault(const Constant(''))();
+  TextColumn get group => text().withDefault(const Constant(''))();
   TextColumn get updatedAt => text().withDefault(const Constant(''))();
   IntColumn get lastSyncedAt =>
       integer().withDefault(const Constant(0))();
@@ -108,7 +109,7 @@ class LocalDb extends _$LocalDb {
   LocalDb.forExecutor(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -122,6 +123,8 @@ class LocalDb extends _$LocalDb {
           //  v2 → v3: also clear local_sync_state — a stale anchor with an
           //           empty message cache made the incremental read return an
           //           empty delta and strand the whole chain.
+          //  v3 → v4: LocalSessions gains the generic `group` column
+          //           (subsession parent link). Additive: keep the cache.
           if (from < 2) {
             await m.deleteTable(localMessages.actualTableName);
             await m.createTable(localMessages);
@@ -129,6 +132,9 @@ class LocalDb extends _$LocalDb {
           if (from < 3) {
             await m.deleteTable(localSyncState.actualTableName);
             await m.createTable(localSyncState);
+          }
+          if (from < 4) {
+            await m.addColumn(localSessions, localSessions.group);
           }
         },
       );

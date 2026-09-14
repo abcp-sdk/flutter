@@ -2221,6 +2221,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'默认预设'**
   String get defaultPreset;
+
+  /// No description provided for @sessionGroupLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'分组'**
+  String get sessionGroupLabel;
+
+  /// No description provided for @subsessionBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'子会话'**
+  String get subsessionBadge;
 }
 
 class _AppLocalizationsDelegate

@@ -104,6 +104,23 @@ class SessionRow extends StatelessWidget {
                                 color: isActive ? colors.primary : null),
                           ),
                         ),
+                        // A subsession (group == its parent's name) is marked.
+                        if (s.group.isNotEmpty) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: colors.primary.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              context.l10n.subsessionBadge,
+                              style: text.micro.copyWith(
+                                  color: colors.primary, fontSize: 9),
+                            ),
+                          ),
+                        ],
                         if (stamp.isNotEmpty)
                           Text(stamp,
                               style: text.micro

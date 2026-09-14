@@ -668,5 +668,7 @@
   "defaults": "Defaults",
   "defaultsHint": "Applied automatically to new sessions (empty = built-in default)",
   "defaultModel": "Default model",
-  "defaultPreset": "Default preset"
+  "defaultPreset": "Default preset",
+  "sessionGroupLabel": "Group",
+  "subsessionBadge": "Subsession"
 }

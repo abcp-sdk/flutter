@@ -50,6 +50,7 @@ class LocalStore {
             repo: Value(s.repo),
             branch: Value(s.branch),
             serverTipId: Value(s.tipId ?? ''),
+            group: Value(s.group),
             messageSeq: Value(s.messageSeq),
             lastMessageAt: Value(s.lastMessageAt),
             lastMessagePreview: Value(s.lastMessagePreview),
@@ -58,6 +59,7 @@ class LocalStore {
           ),
           onConflict: DoUpdate((_) => LocalSessionsCompanion(
                 serverTipId: Value(s.tipId ?? ''),
+                group: Value(s.group),
                 messageSeq: Value(s.messageSeq),
                 lastMessageAt: Value(s.lastMessageAt),
                 lastMessagePreview: Value(s.lastMessagePreview),
@@ -238,6 +240,7 @@ class LocalStore {
         branch: r.branch,
         tipId: r.serverTipId.isEmpty ? null : r.serverTipId,
         messageSeq: r.messageSeq,
+        group: r.group,
         lastMessageAt: r.lastMessageAt,
         lastMessagePreview: r.lastMessagePreview,
         updatedAt: r.updatedAt,
