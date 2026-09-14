@@ -2233,6 +2233,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'子会话'**
   String get subsessionBadge;
+
+  /// No description provided for @subsessionCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个子会话'**
+  String subsessionCount(Object count);
 }
 
 class _AppLocalizationsDelegate

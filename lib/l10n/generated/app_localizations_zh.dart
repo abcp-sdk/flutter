@@ -1163,4 +1163,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get subsessionBadge => '子会话';
+
+  @override
+  String subsessionCount(Object count) {
+    return '$count 个子会话';
+  }
 }

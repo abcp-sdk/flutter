@@ -1176,4 +1176,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get subsessionBadge => 'Subsession';
+
+  @override
+  String subsessionCount(Object count) {
+    return '$count subsessions';
+  }
 }

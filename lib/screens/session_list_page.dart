@@ -29,13 +29,19 @@ class _SessionListPageState extends State<SessionListPage> {
   bool _selectMode = false;
   final Set<String> _selected = {};
 
+  // Subsession tree: parents with children are COLLAPSED by default; the set
+  // holds the ids the user manually expanded (memory-only by design).
+  final Set<String> _expanded = {};
+
   @override
   void initState() {
     super.initState();
     store.addListener(_onStore);
     // The session list is driven by the store's watchSessions stream; this is
     // just a first reconciliation in case the stream hasn't emitted yet.
-    WidgetsBinding.instance.addPostFrameCallback((_) => store.refreshSessions());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => store.refreshSessions(),
+    );
   }
 
   @override
@@ -73,7 +79,8 @@ class _SessionListPageState extends State<SessionListPage> {
 
   void _toggleAll() {
     setState(() {
-      final ids = _filtered.map((s) => s.id).toSet();
+      // Select-all covers every visible row, subsessions included.
+      final ids = _display.map((s) => s.id).toSet();
       if (_selected.length == ids.length) {
         _selected.clear();
       } else {
@@ -87,9 +94,11 @@ class _SessionListPageState extends State<SessionListPage> {
   Future<void> _deleteSelected() async {
     if (_selected.isEmpty) return;
     final n = _selected.length;
-    final ok = await confirmDialog(context,
-        title: context.l10n.deleteSessionsTitle,
-        description: context.l10n.deleteSessionsBody('$n'));
+    final ok = await confirmDialog(
+      context,
+      title: context.l10n.deleteSessionsTitle,
+      description: context.l10n.deleteSessionsBody('$n'),
+    );
     if (ok != true) return;
     final ids = _selected.toList();
     final failed = await store.deleteSessions(ids);
@@ -106,13 +115,15 @@ class _SessionListPageState extends State<SessionListPage> {
   List<Session> get _sorted {
     final all = [...store.sessions];
     all.sort((a, b) {
-      final at = DateTime.tryParse(
-              a.lastMessageAt.isNotEmpty ? a.lastMessageAt : a.updatedAt)
-          ?.millisecondsSinceEpoch ??
+      final at =
+          DateTime.tryParse(
+            a.lastMessageAt.isNotEmpty ? a.lastMessageAt : a.updatedAt,
+          )?.millisecondsSinceEpoch ??
           0;
-      final bt = DateTime.tryParse(
-              b.lastMessageAt.isNotEmpty ? b.lastMessageAt : b.updatedAt)
-          ?.millisecondsSinceEpoch ??
+      final bt =
+          DateTime.tryParse(
+            b.lastMessageAt.isNotEmpty ? b.lastMessageAt : b.updatedAt,
+          )?.millisecondsSinceEpoch ??
           0;
       return bt - at;
     });
@@ -123,10 +134,52 @@ class _SessionListPageState extends State<SessionListPage> {
     final q = _q.text.trim().toLowerCase();
     if (q.isEmpty) return _sorted;
     return _sorted
-        .where((s) =>
-            s.id.toLowerCase().contains(q) ||
-            s.lastMessagePreview.toLowerCase().contains(q))
+        .where(
+          (s) =>
+              s.id.toLowerCase().contains(q) ||
+              s.lastMessagePreview.toLowerCase().contains(q),
+        )
         .toList();
+  }
+
+  /// Build the rendered list: top-level sessions ordered by recency with their
+  /// subsessions (group == parent id) nested below them when expanded.
+  /// Depth is 1 by protocol; children of missing parents are promoted to the
+  /// top level so nothing disappears. While searching, the list stays flat so
+  /// subsessions remain findable by name.
+  List<Session> get _display {
+    final sessions = _filtered;
+    if (_searching) return sessions;
+    final byId = {for (final s in sessions) s.id: s};
+    final childrenOf = <String, List<Session>>{};
+    final top = <Session>[];
+    for (final s in sessions) {
+      final parent = s.group;
+      if (parent.isNotEmpty && byId.containsKey(parent)) {
+        childrenOf.putIfAbsent(parent, () => []).add(s);
+      } else {
+        // Top-level session or an orphaned subsession (parent gone).
+        top.add(s);
+      }
+    }
+    final out = <Session>[];
+    for (final s in top) {
+      out.add(s);
+      final kids = childrenOf[s.id];
+      if (kids != null && kids.isNotEmpty && _expanded.contains(s.id)) {
+        out.addAll(kids);
+      }
+    }
+    return out;
+  }
+
+  int _childCount(String id) {
+    final sessions = _filtered;
+    var n = 0;
+    for (final s in sessions) {
+      if (s.group == id) n++;
+    }
+    return n;
   }
 
   Future<void> _create() async {
@@ -140,7 +193,7 @@ class _SessionListPageState extends State<SessionListPage> {
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
-    final sessions = _filtered;
+    final sessions = _display;
     return PopScope(
       // Back exits selection/search instead of leaving the tab.
       canPop: !_selectMode && !_searching,
@@ -163,28 +216,28 @@ class _SessionListPageState extends State<SessionListPage> {
                   onPressed: _exitSelect,
                 )
               : _searching
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      onPressed: () {
-                        _q.clear();
-                        setState(() => _searching = false);
-                      },
-                    )
-                  : null,
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () {
+                    _q.clear();
+                    setState(() => _searching = false);
+                  },
+                )
+              : null,
           title: _selectMode
               ? Text(context.l10n.selectedCount('${_selected.length}'))
               : _searching
-                  ? TextField(
-                      controller: _q,
-                      autofocus: true,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        hintText: context.l10n.searchHint,
-                        border: InputBorder.none,
-                        prefixIcon: const Icon(Icons.search_rounded),
-                      ),
-                    )
-                  : Text(context.l10n.tabChat),
+              ? TextField(
+                  controller: _q,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: context.l10n.searchHint,
+                    border: InputBorder.none,
+                    prefixIcon: const Icon(Icons.search_rounded),
+                  ),
+                )
+              : Text(context.l10n.tabChat),
           actions: _selectMode
               ? [
                   IconButton(
@@ -222,74 +275,100 @@ class _SessionListPageState extends State<SessionListPage> {
                   ),
                 ],
         ),
-      body: Column(
-        children: [
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg, AppSpacing.sm, AppSpacing.md, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.l10n.recent,
-                    style: text.micro.copyWith(
+        body: Column(
+          children: [
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.md,
+                0,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.l10n.recent,
+                      style: text.micro.copyWith(
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1,
-                        color: colors.mutedForeground),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => store.refreshSessions(),
-              child: sessions.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(AppSpacing.lg),
-                          child: Center(
-                            child: Text(context.l10n.noSessions,
-                                style: text.meta
-                                    .copyWith(color: colors.mutedForeground)),
-                          ),
-                        ),
-                      ],
-                    )
-                  : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: sessions.length,
-                      itemBuilder: (ctx, i) {
-                        final s = sessions[i];
-                        final active = s.id == store.activeSessionId;
-                        final preview = s.lastMessagePreview.isNotEmpty
-                            ? s.lastMessagePreview
-                            : s.id;
-                        return SessionRow(
-                          key: ValueKey(s.id),
-                          session: s,
-                          isActive: active,
-                          subtitle: preview,
-                          unread: store.isUnread(s),
-                          unreadCount: store.unreadCountFor(s),
-                          selectable: _selectMode,
-                          selected: _selected.contains(s.id),
-                          onTap: _selectMode
-                              ? () => _toggle(s.id)
-                              : () => store.pickSession(s.id),
-                          onLongPress: _selectMode
-                              ? null
-                              : () => _sessionActions(s),
-                        );
-                      },
+                        color: colors.mutedForeground,
+                      ),
                     ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => store.refreshSessions(),
+                child: sessions.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.lg),
+                            child: Center(
+                              child: Text(
+                                context.l10n.noSessions,
+                                style: text.meta.copyWith(
+                                  color: colors.mutedForeground,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: sessions.length,
+                        itemBuilder: (ctx, i) {
+                          final s = sessions[i];
+                          final active = s.id == store.activeSessionId;
+                          final preview = s.lastMessagePreview.isNotEmpty
+                              ? s.lastMessagePreview
+                              : s.id;
+                          final isChild = _searching
+                              ? false
+                              : s.group.isNotEmpty &&
+                                    sessions.any((p) => p.id == s.group);
+                          final childCount = isChild || _searching
+                              ? 0
+                              : _childCount(s.id);
+                          final expanded = _expanded.contains(s.id);
+                          return SessionRow(
+                            key: ValueKey(s.id),
+                            session: s,
+                            isActive: active,
+                            subtitle: preview,
+                            unread: store.isUnread(s),
+                            unreadCount: store.unreadCountFor(s),
+                            selectable: _selectMode,
+                            selected: _selected.contains(s.id),
+                            childCount: childCount,
+                            expanded: expanded,
+                            isChild: isChild,
+                            onToggleExpand: childCount > 0
+                                ? () => setState(() {
+                                    if (!_expanded.remove(s.id)) {
+                                      _expanded.add(s.id);
+                                    }
+                                  })
+                                : null,
+                            onTap: _selectMode
+                                ? () => _toggle(s.id)
+                                : () => store.pickSession(s.id),
+                            onLongPress: _selectMode
+                                ? null
+                                : () => _sessionActions(s),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -313,10 +392,14 @@ class _SessionListPageState extends State<SessionListPage> {
                 },
               ),
             ListTile(
-              leading: Icon(Icons.delete_outline_rounded,
-                  color: colorsOf(ctx).destructive),
-              title: Text(ctx.l10n.deleteSession,
-                  style: TextStyle(color: colorsOf(ctx).destructive)),
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: colorsOf(ctx).destructive,
+              ),
+              title: Text(
+                ctx.l10n.deleteSession,
+                style: TextStyle(color: colorsOf(ctx).destructive),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _deleteSessionFlow(s);
@@ -329,9 +412,11 @@ class _SessionListPageState extends State<SessionListPage> {
   }
 
   Future<void> _deleteSessionFlow(Session s) async {
-    final ok = await confirmDialog(context,
-        title: context.l10n.deleteSessionTitle,
-        description: context.l10n.deleteSessionBody(s.id));
+    final ok = await confirmDialog(
+      context,
+      title: context.l10n.deleteSessionTitle,
+      description: context.l10n.deleteSessionBody(s.id),
+    );
     if (ok != true) return;
     try {
       await store.deleteSession(s.id);

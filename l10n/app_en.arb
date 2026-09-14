@@ -670,5 +670,6 @@
   "defaultModel": "Default model",
   "defaultPreset": "Default preset",
   "sessionGroupLabel": "Group",
-  "subsessionBadge": "Subsession"
+  "subsessionBadge": "Subsession",
+  "subsessionCount": "{count} subsessions"
 }

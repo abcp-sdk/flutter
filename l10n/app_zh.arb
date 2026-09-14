@@ -663,5 +663,6 @@
   "defaultModel": "默认模型",
   "defaultPreset": "默认预设",
   "sessionGroupLabel": "分组",
-  "subsessionBadge": "子会话"
+  "subsessionBadge": "子会话",
+  "subsessionCount": "{count} 个子会话"
 }

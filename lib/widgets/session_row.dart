@@ -30,17 +30,33 @@ class SessionRow extends StatelessWidget {
   final Session session;
   final bool isActive;
   final String subtitle;
+
   /// True when there is a newer message than the client's local read
   /// watermark for this session.
   final bool unread;
+
   /// Number of unread messages (shown as a numeric badge when > 0).
   final int unreadCount;
+
   /// Selection mode: when true the row shows a leading checkbox instead of the
   /// avatar and taps toggle selection rather than opening the session.
   final bool selectable;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+
+  /// Number of subsessions nested under this session (0 = none). When > 0 the
+  /// row shows an expand chevron + count chip; tapping it toggles [expanded].
+  final int childCount;
+
+  /// Whether the nested subsessions are currently shown.
+  final bool expanded;
+
+  /// Toggled when the user taps the expand chevron / count chip.
+  final VoidCallback? onToggleExpand;
+
+  /// This row renders as an indented child of a parent session.
+  final bool isChild;
   const SessionRow({
     super.key,
     required this.session,
@@ -52,6 +68,10 @@ class SessionRow extends StatelessWidget {
     this.onLongPress,
     this.selectable = false,
     this.selected = false,
+    this.childCount = 0,
+    this.expanded = false,
+    this.onToggleExpand,
+    this.isChild = false,
   });
 
   @override
@@ -60,21 +80,40 @@ class SessionRow extends StatelessWidget {
     final text = textOf(context);
     final s = session;
     final stamp = wechatTime(
-        context, s.lastMessageAt.isNotEmpty ? s.lastMessageAt : s.updatedAt);
+      context,
+      s.lastMessageAt.isNotEmpty ? s.lastMessageAt : s.updatedAt,
+    );
     return Material(
       color: selected
           ? colors.primary.withValues(alpha: 0.14)
           : isActive
-              ? colors.primary.withValues(alpha: 0.10)
-              : Colors.transparent,
+          ? colors.primary.withValues(alpha: 0.10)
+          : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          // Child rows are indented with a left connector so they visually
+          // nest under their parent.
           child: Row(
             children: [
+              if (isChild) ...[
+                const SizedBox(width: AppSpacing.md),
+                Container(
+                  width: 10,
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 2,
+                    height: 34,
+                    color: colors.mutedForeground.withValues(alpha: 0.35),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm - 4),
+              ],
               // In selection mode the avatar becomes a checkbox (tap toggles).
               if (selectable) ...[
                 Icon(
@@ -100,16 +139,19 @@ class SessionRow extends StatelessWidget {
                             s.id,
                             overflow: TextOverflow.ellipsis,
                             style: text.meta.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: isActive ? colors.primary : null),
+                              fontWeight: FontWeight.w600,
+                              color: isActive ? colors.primary : null,
+                            ),
                           ),
                         ),
                         // A subsession (group == its parent's name) is marked.
-                        if (s.group.isNotEmpty) ...[
+                        if (s.group.isNotEmpty && !isChild) ...[
                           const SizedBox(width: AppSpacing.xs),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
                               color: colors.primary.withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(999),
@@ -117,25 +159,72 @@ class SessionRow extends StatelessWidget {
                             child: Text(
                               context.l10n.subsessionBadge,
                               style: text.micro.copyWith(
-                                  color: colors.primary, fontSize: 9),
+                                color: colors.primary,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ),
+                        ],
+                        // Expand chevron + child count for parents.
+                        if (childCount > 0) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: onToggleExpand,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.mutedForeground.withValues(
+                                  alpha: 0.14,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    context.l10n.subsessionCount('$childCount'),
+                                    style: text.micro.copyWith(
+                                      color: colors.mutedForeground,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                  Icon(
+                                    expanded
+                                        ? Icons.keyboard_arrow_up_rounded
+                                        : Icons.keyboard_arrow_down_rounded,
+                                    size: 13,
+                                    color: colors.mutedForeground,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                         if (stamp.isNotEmpty)
-                          Text(stamp,
-                              style: text.micro
-                                  .copyWith(color: colors.mutedForeground)),
+                          Text(
+                            stamp,
+                            style: text.micro.copyWith(
+                              color: colors.mutedForeground,
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
                         Expanded(
-                          child: Text(subtitle,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                              style: text.micro
-                                  .copyWith(color: colors.mutedForeground)),
+                          child: Text(
+                            subtitle,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: text.micro.copyWith(
+                              color: colors.mutedForeground,
+                            ),
+                          ),
                         ),
                         if (unread && !isActive && unreadCount > 0) ...[
                           const SizedBox(width: AppSpacing.xs),
@@ -175,10 +264,11 @@ class _UnreadBadge extends StatelessWidget {
       child: Text(
         label,
         style: text.micro.copyWith(
-            color: Colors.white,
-            fontSize: 10,
-            height: 1,
-            fontWeight: FontWeight.w600),
+          color: Colors.white,
+          fontSize: 10,
+          height: 1,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
