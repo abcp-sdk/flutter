@@ -5,6 +5,13 @@ import '../models.dart';
 import '../theme/app_theme.dart';
 import 'chat_avatar.dart';
 
+/// Width of the fixed right-aligned timestamp slot in the session row. Sized
+/// for the longest relative label ("59 分钟前" / "23 hours ago") at the micro
+/// font size (10px); shorter labels simply leave slack. Keeping the slot
+/// constant makes every trailing chip (e.g. the subsession-count pill) end at
+/// the same x across all rows.
+const double _stampSlotWidth = 52;
+
 /// WeChat-style relative timestamp (locale-aware).
 String wechatTime(BuildContext context, String iso) {
   final dt = DateTime.tryParse(iso)?.toLocal();
@@ -204,13 +211,22 @@ class SessionRow extends StatelessWidget {
                             ),
                           ),
                         ],
-                        if (stamp.isNotEmpty)
-                          Text(
+                        // The trailing timestamp occupies a FIXED-WIDTH,
+                        // right-aligned slot: the subsession pill (and every
+                        // other trailing chip) therefore ends at the same x on
+                        // every row instead of drifting with label length.
+                        SizedBox(
+                          width: _stampSlotWidth,
+                          child: Text(
                             stamp,
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
                             style: text.micro.copyWith(
                               color: colors.mutedForeground,
                             ),
                           ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 2),
