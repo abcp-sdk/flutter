@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:media_kit/media_kit.dart';
 
 import 'api.dart';
 import 'auth_gate.dart';
@@ -16,9 +15,6 @@ import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // media_kit (audio + video, all platforms) needs its native bindings
-  // initialized once before any Player is constructed.
-  MediaKit.ensureInitialized();
   runApp(const EasyLabApp());
 }
 

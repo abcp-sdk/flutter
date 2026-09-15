@@ -13,3 +13,10 @@ dependency_overrides:
     path: third_party/pasteboard
   desktop_drop:
     path: third_party/desktop_drop
+  # path_provider_foundation 2.6.0 dropped its darwin Swift package (darwin-only
+  # FFI via the native-assets `hooks` toolchain) and thus pulls objective_c
+  # 9.6.x, whose build hook references `Architecture.arm64e` — a member missing
+  # from the code_assets version bundled with this Flutter SDK, so macOS release
+  # builds fail in `build_hooks`. 2.4.1 is the last release with a real darwin
+  # Package.swift (SwiftPM): no CocoaPods, no native-assets hook.
+  path_provider_foundation: 2.4.1

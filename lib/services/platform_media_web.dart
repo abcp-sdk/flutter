@@ -7,7 +7,7 @@ import 'package:web/web.dart' as web;
 import 'media_handle.dart';
 
 /// Web: no filesystem. Create an object URL for the bytes so network-based
-/// viewers (Image.network / media_kit) can consume it.
+/// viewers (Image.network and the video/audio players) can consume it.
 Future<MediaHandle> materializeMedia(
   String key,
   Uint8List bytes, {

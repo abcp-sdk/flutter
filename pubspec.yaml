@@ -31,9 +31,12 @@ dependencies:
   drift: ^2.35.0
   drift_flutter: ^0.3.1
   sqlite3_flutter_libs: ^0.6.0+eol
-  media_kit: ^1.2.6
-  media_kit_video: ^2.0.1
-  media_kit_libs_video: ^1.0.7
+  # Audio/video playback. These are the Flutter-team/community plugins with
+  # FIRST-CLASS Swift Package Manager support on macOS/iOS, which keeps the
+  # darwin build entirely CocoaPods-free (media_kit's macOS video packages are
+  # podspec-only, forcing `pod install`).
+  video_player: ^2.11.1
+  just_audio: ^0.10.6
   web: ^1.1.1
   # Clipboard image/file paste (desktop + Android) and file drag-and-drop
   # (all platforms). Attachment naming uses uuid v4.

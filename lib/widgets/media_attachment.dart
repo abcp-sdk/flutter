@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:just_audio/just_audio.dart' as ja;
+import 'package:video_player/video_player.dart' as vp;
 
 import '../api.dart';
 import '../i18n.dart';
 import '../services/download_service.dart';
 import '../services/media_cache.dart';
 import '../services/media_handle.dart';
+import '../services/media_player_io.dart'
+    if (dart.library.js_interop) '../services/media_player_web.dart'
+    as player;
 import '../theme/app_theme.dart';
 import 'dialogs.dart';
 
@@ -67,14 +70,14 @@ String formatBytes(int n) {
   return '$n B';
 }
 
-/// The source locator media_kit / Image should open for a [MediaHandle]:
-/// a filesystem path on native, an object URL on web.
-String _locator(MediaHandle h) => h.path ?? h.uri!;
-
 /// A media attachment rendered by type: images open full-screen, audio plays
-/// inline with a seek bar + time, video has a poster + full-screen player,
-/// pdf/text preview inline (expandable), everything else a save card. All
-/// through media_kit, which is cross-platform (mobile/desktop/web).
+/// inline with a seek bar + time, video has a poster (first frame) + a
+/// full-screen player, pdf/text preview inline (expandable), everything else a
+/// save card.
+///
+/// Playback uses `just_audio` (audio) and `video_player` (video) — both ship
+/// official Swift Package Manager manifests on darwin, so the macOS/iOS build
+/// needs no CocoaPods.
 class MediaCard extends StatefulWidget {
   final AgentBindApi api;
   final String code;
@@ -361,7 +364,8 @@ class _ImageCard extends StatelessWidget {
   }
 }
 
-/// Audio card: media_kit plays a file path (native) or object URL (web).
+/// Audio card: just_audio plays the materialised source (file path on native,
+/// object URL on web) with a seek bar + time.
 class _AudioCard extends StatefulWidget {
   final AgentBindApi api;
   final String code;
@@ -385,40 +389,41 @@ class _AudioCard extends StatefulWidget {
 }
 
 class _AudioCardState extends State<_AudioCard> {
-  final _player = Player();
+  final _player = ja.AudioPlayer();
   bool _ready = false;
+  Duration? _duration;
   bool _playing = false;
   Duration _position = Duration.zero;
-  Duration? _duration;
+  int _dragMs = -1;
   final List<StreamSubscription<dynamic>> _subs = [];
 
   @override
   void initState() {
     super.initState();
+    _subs.add(_player.playerStateStream.listen((s) {
+      if (mounted) setState(() => _playing = s.playing);
+    }));
+    _subs.add(_player.positionStream.listen((p) {
+      if (mounted && _dragMs < 0) setState(() => _position = p);
+    }));
+    _subs.add(_player.durationStream.listen((d) {
+      if (mounted && d != null && d > Duration.zero) {
+        setState(() => _duration = d);
+      }
+    }));
     _load();
-    _subs.add(_player.stream.playing.listen((p) {
-      if (mounted) setState(() => _playing = p);
-    }));
-    _subs.add(_player.stream.position.listen((p) {
-      if (mounted) setState(() => _position = p);
-    }));
-    _subs.add(_player.stream.duration.listen((d) {
-      if (mounted && d > Duration.zero) setState(() => _duration = d);
-    }));
   }
 
   Future<void> _load() async {
     try {
       final h = await MediaCache(widget.api).fileFor(widget.code,
           mime: widget.mime, name: widget.name, localPath: widget.localPath);
-      // NEVER autoplay: open paused; the user taps the play button to start.
-      await _player.open(Media(_locator(h)), play: false);
+      // NEVER autoplay: load paused; the user taps play to start.
+      await _player.setUrl(player.audioSourceFor(h));
       if (!mounted) return;
       setState(() {
         _ready = true;
-        if (_player.state.duration > Duration.zero) {
-          _duration = _player.state.duration;
-        }
+        _duration ??= _player.duration;
       });
     } catch (_) {
       if (mounted) setState(() => _ready = false);
@@ -435,11 +440,12 @@ class _AudioCardState extends State<_AudioCard> {
   }
 
   void _toggle() {
-    if (_player.state.playing) {
+    if (_player.playing) {
       _player.pause();
     } else {
-      final d = _player.state.duration;
-      if (d > Duration.zero && _player.state.position >= d) {
+      // Restart when the clip finished.
+      final d = _player.duration;
+      if (d != null && d > Duration.zero && _player.position >= d) {
         _player.seek(Duration.zero);
       }
       _player.play();
@@ -450,9 +456,12 @@ class _AudioCardState extends State<_AudioCard> {
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
-    final total = _duration ?? _player.state.duration;
-    final max = total.inMilliseconds.toDouble();
-    final pos = _position.inMilliseconds.toDouble().clamp(0.0, max).toDouble();
+    final total = _duration ?? _player.duration;
+    final max = (total ?? Duration.zero).inMilliseconds.toDouble();
+    final shown = _dragMs >= 0
+        ? Duration(milliseconds: _dragMs)
+        : _position;
+    final pos = shown.inMilliseconds.toDouble().clamp(0.0, max).toDouble();
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
       padding: const EdgeInsets.symmetric(
@@ -503,12 +512,16 @@ class _AudioCardState extends State<_AudioCard> {
                   value: max <= 0 ? 0 : pos,
                   max: max <= 0 ? 1 : max,
                   onChanged: _ready && max > 0
-                      ? (v) => _player.seek(Duration(milliseconds: v.round()))
+                      ? (v) => setState(() => _dragMs = v.round())
                       : null,
+                  onChangeEnd: (v) {
+                    _player.seek(Duration(milliseconds: v.round()));
+                    setState(() => _dragMs = -1);
+                  },
                 ),
               ),
               Text(
-                  '${formatDurationLabel(_position)} / ${formatDurationLabel(total)}',
+                  '${formatDurationLabel(shown)} / ${formatDurationLabel(total)}',
                   style: text.micro.copyWith(color: colors.mutedForeground)),
               const SizedBox(width: AppSpacing.xs),
             ],
@@ -519,7 +532,7 @@ class _AudioCardState extends State<_AudioCard> {
   }
 }
 
-/// Video card: a poster (first frame, native only) + a full-screen player.
+/// Video card: a poster (first frame) + a full-screen player.
 class _VideoCard extends StatefulWidget {
   final AgentBindApi api;
   final String code;
@@ -543,8 +556,7 @@ class _VideoCard extends StatefulWidget {
 }
 
 class _VideoCardState extends State<_VideoCard> {
-  final _player = Player();
-  VideoController? _controller;
+  vp.VideoPlayerController? _controller;
   bool _ready = false;
   Duration? _duration;
 
@@ -552,24 +564,27 @@ class _VideoCardState extends State<_VideoCard> {
   void initState() {
     super.initState();
     _load();
-    _player.stream.duration.listen((d) {
-      if (mounted && d > Duration.zero) setState(() => _duration = d);
-    });
   }
 
   Future<void> _load() async {
     try {
       final h = await MediaCache(widget.api).fileFor(widget.code,
           mime: widget.mime, name: widget.name, localPath: widget.localPath);
-      await _player.open(Media(_locator(h)), play: false);
-      final c = VideoController(_player);
-      if (!mounted) return;
+      final c = player.videoControllerFor(h);
+      await c.initialize();
+      // Poster: score the first frame without playing, so the tile shows a
+      // still image rather than a black box.
+      try {
+        await c.seekTo(Duration.zero);
+      } catch (_) {}
+      if (!mounted) {
+        c.dispose();
+        return;
+      }
       setState(() {
         _controller = c;
         _ready = true;
-        if (_player.state.duration > Duration.zero) {
-          _duration = _player.state.duration;
-        }
+        if (c.value.duration > Duration.zero) _duration = c.value.duration;
       });
     } catch (_) {
       if (mounted) setState(() => _ready = false);
@@ -578,15 +593,16 @@ class _VideoCardState extends State<_VideoCard> {
 
   @override
   void dispose() {
-    _player.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _openFullscreen(BuildContext context) async {
-    if (_controller == null) return;
+    final c = _controller;
+    if (c == null) return;
     await Navigator.of(context).push(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => _FullscreenVideo(player: _player, controller: _controller!),
+      builder: (_) => _FullscreenVideo(controller: c),
     ));
   }
 
@@ -594,6 +610,7 @@ class _VideoCardState extends State<_VideoCard> {
   Widget build(BuildContext context) {
     final colors = colorsOf(context);
     final text = textOf(context);
+    final c = _controller;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Column(
@@ -608,13 +625,19 @@ class _VideoCardState extends State<_VideoCard> {
                 width: widget.compact ? 200 : 240,
                 height: widget.compact ? 120 : 150,
                 color: Colors.black,
-                child: _ready
+                child: _ready && c != null
                     ? Stack(
                         fit: StackFit.expand,
                         children: [
-                          Video(
-                            controller: _controller!,
-                            controls: NoVideoControls,
+                          // Cover-fit the poster frame.
+                          FittedBox(
+                            fit: BoxFit.cover,
+                            clipBehavior: Clip.hardEdge,
+                            child: SizedBox(
+                              width: c.value.size.width,
+                              height: c.value.size.height,
+                              child: vp.VideoPlayer(c),
+                            ),
                           ),
                           const Center(
                             child: Icon(Icons.play_circle_fill_rounded,
@@ -643,18 +666,110 @@ class _VideoCardState extends State<_VideoCard> {
   }
 }
 
-class _FullscreenVideo extends StatelessWidget {
-  final Player player;
-  final VideoController controller;
-  const _FullscreenVideo({required this.player, required this.controller});
+class _FullscreenVideo extends StatefulWidget {
+  final vp.VideoPlayerController controller;
+  const _FullscreenVideo({required this.controller});
+
+  @override
+  State<_FullscreenVideo> createState() => _FullscreenVideoState();
+}
+
+class _FullscreenVideoState extends State<_FullscreenVideo> {
+  bool _playing = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  int _dragMs = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.controller;
+    _duration = c.value.duration;
+    c.addListener(_onTick);
+  }
+
+  void _onTick() {
+    final c = widget.controller;
+    if (!mounted) return;
+    setState(() {
+      _playing = c.value.isPlaying;
+      _duration = c.value.duration;
+      if (_dragMs < 0) _position = c.value.position;
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTick);
+    // Pause when leaving fullscreen; the poster tile stays.
+    widget.controller.pause();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final c = widget.controller;
+    final total = _duration.inMilliseconds.toDouble();
+    final shown = _dragMs >= 0 ? Duration(milliseconds: _dragMs) : _position;
+    final pos = shown.inMilliseconds.toDouble().clamp(0.0, total).toDouble();
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Center(child: Video(controller: controller, controls: AdaptiveVideoControls)),
+          Center(
+            child: AspectRatio(
+              aspectRatio: c.value.aspectRatio,
+              child: vp.VideoPlayer(c),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.5),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      color: Colors.white,
+                    ),
+                    onPressed: () {
+                      if (c.value.isPlaying) {
+                        c.pause();
+                      } else {
+                        if (c.value.position >= c.value.duration) {
+                          c.seekTo(Duration.zero);
+                        }
+                        c.play();
+                      }
+                    },
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: total <= 0 ? 0 : pos,
+                      max: total <= 0 ? 1 : total,
+                      onChanged: total <= 0
+                          ? null
+                          : (v) => setState(() => _dragMs = v.round()),
+                      onChangeEnd: (v) {
+                        c.seekTo(Duration(milliseconds: v.round()));
+                        setState(() => _dragMs = -1);
+                      },
+                    ),
+                  ),
+                  Text(
+                    '${formatDurationLabel(shown)} / ${formatDurationLabel(_duration)}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
           Positioned(
             top: 8,
             right: 8,
@@ -788,9 +903,9 @@ class _InlinePreviewCardState extends State<_InlinePreviewCard> {
   }
 }
 
-/// A small, fixed-size attachment tile: a square thumbnail (image) or a type
-/// icon, no file name. Uniform so several fit per line. An optional [overlay]
-/// (status / remove badge) is drawn in the corner.
+/// A small, fixed-size attachment tile: a square thumbnail (image / video
+/// poster) or a type icon, no file name. Uniform so several fit per line. An
+/// optional [overlay] (status / remove badge) is drawn in the corner.
 class AttachmentTag extends StatelessWidget {
   final AgentBindApi api;
   final String code;
@@ -841,16 +956,19 @@ class AttachmentTag extends StatelessWidget {
         },
       );
     } else if (kind == MediaKind.audio) {
-      content = _MediaThumb(
+      content = _AudioThumb(
           api: api,
           code: code,
           name: name,
           mime: mime,
-          localPath: localPath,
-          kind: kind);
+          localPath: localPath);
     } else if (kind == MediaKind.video) {
-      content = Icon(Icons.videocam_outlined,
-          size: 20, color: colors.mutedForeground);
+      content = _VideoThumb(
+          api: api,
+          code: code,
+          name: name,
+          mime: mime,
+          localPath: localPath);
     } else {
       content = Icon(_iconFor(kind), size: 20, color: colors.mutedForeground);
     }
@@ -884,48 +1002,46 @@ class AttachmentTag extends StatelessWidget {
 }
 
 /// Audio thumbnail: a type icon with the clip's DURATION underneath.
-class _MediaThumb extends StatefulWidget {
+class _AudioThumb extends StatefulWidget {
   final AgentBindApi api;
   final String code;
   final String? name;
   final String? mime;
   final String? localPath;
-  final MediaKind kind;
-  const _MediaThumb({
+  const _AudioThumb({
     required this.api,
     required this.code,
     required this.name,
     required this.mime,
     required this.localPath,
-    required this.kind,
   });
 
   @override
-  State<_MediaThumb> createState() => _MediaThumbState();
+  State<_AudioThumb> createState() => _AudioThumbState();
 }
 
-class _MediaThumbState extends State<_MediaThumb> {
-  final _player = Player();
+class _AudioThumbState extends State<_AudioThumb> {
+  final _player = ja.AudioPlayer();
   Duration? _duration;
-  StreamSubscription<dynamic>? _durSub;
+  StreamSubscription<Duration?>? _durSub;
 
   @override
   void initState() {
     super.initState();
-    _load();
-    _durSub = _player.stream.duration.listen((d) {
-      if (mounted && d > Duration.zero) setState(() => _duration = d);
+    _durSub = _player.durationStream.listen((d) {
+      if (mounted && d != null && d > Duration.zero) {
+        setState(() => _duration = d);
+      }
     });
+    _load();
   }
 
   Future<void> _load() async {
     try {
       final h = await MediaCache(widget.api).fileFor(widget.code,
           mime: widget.mime, name: widget.name, localPath: widget.localPath);
-      await _player.open(Media(_locator(h)), play: false);
-      if (mounted && _player.state.duration > Duration.zero) {
-        setState(() => _duration = _player.state.duration);
-      }
+      await _player.setUrl(player.audioSourceFor(h));
+      if (mounted) setState(() => _duration = _player.duration);
     } catch (_) {}
   }
 
@@ -949,6 +1065,86 @@ class _MediaThumbState extends State<_MediaThumb> {
           formatDurationLabel(_duration),
           style: text.micro.copyWith(
               fontSize: 9, height: 1.0, color: colors.mutedForeground),
+        ),
+      ],
+    );
+  }
+}
+
+/// Video thumbnail: the first frame as a poster (falls back to an icon).
+class _VideoThumb extends StatefulWidget {
+  final AgentBindApi api;
+  final String code;
+  final String? name;
+  final String? mime;
+  final String? localPath;
+  const _VideoThumb({
+    required this.api,
+    required this.code,
+    required this.name,
+    required this.mime,
+    required this.localPath,
+  });
+
+  @override
+  State<_VideoThumb> createState() => _VideoThumbState();
+}
+
+class _VideoThumbState extends State<_VideoThumb> {
+  vp.VideoPlayerController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final h = await MediaCache(widget.api).fileFor(widget.code,
+          mime: widget.mime, name: widget.name, localPath: widget.localPath);
+      final c = player.videoControllerFor(h);
+      await c.initialize();
+      try {
+        await c.seekTo(Duration.zero);
+      } catch (_) {}
+      if (!mounted) {
+        c.dispose();
+        return;
+      }
+      setState(() => _controller = c);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = colorsOf(context);
+    final c = _controller;
+    if (c == null) {
+      return Icon(Icons.videocam_outlined,
+          size: 20, color: colors.mutedForeground);
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FittedBox(
+          fit: BoxFit.cover,
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: c.value.size.width,
+            height: c.value.size.height,
+            child: vp.VideoPlayer(c),
+          ),
+        ),
+        const Center(
+          child: Icon(Icons.play_circle_fill_rounded,
+              size: 18, color: Colors.white70),
         ),
       ],
     );

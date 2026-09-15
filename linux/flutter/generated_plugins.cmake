@@ -5,8 +5,6 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   file_selector_linux
-  media_kit_libs_linux
-  media_kit_video
   pasteboard
   record_linux
 )
